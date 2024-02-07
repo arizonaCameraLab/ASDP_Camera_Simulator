@@ -30,6 +30,8 @@ protected:
   int m_verbosity; ///< The verbosity level of the server, 0 for no verbosity, higher for more verbosity.
   std::string m_error; ///< The error message when the server stops running.
 
+  float m_keepAliveInterval; ///< The keep alive interval in seconds.
+
   // Member functions to implement the commands.
 
   /// @brief Implement the specified command.

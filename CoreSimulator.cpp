@@ -7,12 +7,47 @@
 
 using namespace asdp;
 
+/// @brief Helper function to translate from OpCode to a descriptive string.
+/// @param opCode The OpCode to translate.
+/// @return A descriptive string for the OpCode.
+static std::string OpCodeName(OpCode opCode)
+{
+  switch (opCode) {
+  case RESET: return "RESET";
+  case CANCEL_ALL_STREAMS: return "CANCEL_ALL_STREAMS";
+  case START_RECORDING: return "START_RECORDING";
+  case STOP_RECORDING: return "STOP_RECORDING";
+  case SET_START_UP_RECORDING_STATE: return "SET_START_UP_RECORDING_STATE";
+  case START_REPLAY: return "START_REPLAY";
+  case PAUSE_REPLAY: return "PAUSE_REPLAY";
+  case STOP_REPLAY: return "STOP_REPLAY";
+  case SET_KEEPALIVE_INTERVAL: return "SET_KEEPALIVE_INTERVAL";
+  case STREAM_STATE: return "STREAM_STATE";
+  case CANCEL_STATE: return "CANCEL_STATE";
+  case CONFIGURE_TRIGGER: return "CONFIGURE_TRIGGER";
+  case SOFTWARE_TRIGGER: return "SOFTWARE_TRIGGER";
+  case STREAM_EVENTS: return "STREAM_EVENTS";
+  case CANCEL_EVENTS: return "CANCEL_EVENTS";
+  case STREAM_SUBREGIONS: return "STREAM_SUBREGIONS";
+  case CANCEL_SUBREGIONS: return "CANCEL_SUBREGIONS";
+  case ERASE_ALL_STORED_STREAMS: return "ERASE_ALL_STORED_STREAMS";
+  case LIST_STORED_STREAMS: return "LIST_STORED_STREAMS";
+  case ERASE_STORED_STREAM: return "ERASE_STORED_STREAM";
+  case STREAM_TEMPERATURES: return "STREAM_TEMPERATURES";
+  case CANCEL_TEMPERATURES: return "CANCEL_TEMPERATURES";
+  case STREAM_POSES: return "STREAM_POSES";
+  case CANCEL_POSES: return "CANCEL_POSES";
+  default: return "UNKNOWN";
+  }
+}
+
 CoreSimulator::CoreSimulator(uint32_t serialNumber, const std::string& IP,
   std::vector< std::shared_ptr< asdp::IS::ImageSource> > sources,
   int verbosity)
   : CoreServer(serialNumber, IP)
   , m_sources(sources)
   , m_verbosity(verbosity)
+  , m_keepAliveInterval(0)
 {
 }
 
@@ -56,7 +91,7 @@ std::string CoreSimulator::run()
       return "Failed to get op code: " + ErrorMessage(status);
     }
     if (m_verbosity >= 1) {
-      std::cout << "Received command code: " << opCode << std::endl;
+      std::cout << "Received command " << OpCodeName(opCode) << std::endl;
     }
     switch (opCode) {
     case RESET:
@@ -352,7 +387,10 @@ void CoreSimulator::doStopReplay(const CommandPacketStopReplay& command)
 
 void CoreSimulator::doSetKeepAliveInterval(const CommandPacketKeepaliveInterval& command)
 {
-  m_error = "@todo implement doSetKeepAliveInterval";
+  Status status = command.GetInterval(m_keepAliveInterval);
+  if (status != OKAY) {
+    m_error = "Failed to get keep alive interval: " + ErrorMessage(status);
+  }
 }
 
 void CoreSimulator::doStreamState(const CommandPacketStreamState& command)
