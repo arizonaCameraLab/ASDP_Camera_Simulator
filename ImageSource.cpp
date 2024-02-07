@@ -173,16 +173,17 @@ std::string Image::Test()
   return "";
 }
 
-MovingBars::MovingBars(uint16_t width, uint16_t height, size_t numImages,
-  uint16_t numBars, uint16_t barWidth, uint16_t barHeight, uint16_t speed,
+MovingBarsSource::MovingBarsSource(uint16_t width, uint16_t height, size_t numImages,
+  uint16_t numBars, uint16_t barWidth, uint16_t speed,
   uint16_t darkValue, uint16_t brightValue)
   : m_currentIndex(0)
 {
   // Create each image in the sequence, filling in the moving bars for each one.
   for (size_t i = 0; i < numImages; i++) {
     std::shared_ptr< std::vector<uint16_t> > data(new std::vector<uint16_t>(width * height));
-    for (uint16_t y = 0; y < height; y++) {
-      for (uint16_t x = 0; x < width; x++) {
+#pragma omp parallel for
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
         uint16_t value = darkValue;
         for (uint16_t bar = 0; bar < numBars; bar++) {
           if ((x + i * speed) % width >= bar * barWidth && (x + i * speed) % width < (bar + 1) * barWidth) {
@@ -196,7 +197,7 @@ MovingBars::MovingBars(uint16_t width, uint16_t height, size_t numImages,
   }
 }
 
-std::shared_ptr<Image> MovingBars::getNextImage(bool loop)
+std::shared_ptr<Image> MovingBarsSource::getNextImage(bool loop)
 {
   // If there are no images, return nullptr.
   if (m_images.empty()) {
@@ -218,13 +219,63 @@ std::shared_ptr<Image> MovingBars::getNextImage(bool loop)
   return m_images[m_currentIndex++];
 }
 
+std::string MovingBarsSource::Test()
+{
+  try {
+    // Create a moving-bars image source with 4 images of size 200x50,
+    // 25 bars of width 4, moving at 1 pixel per frame.  Set the dark
+    // value to 100 and the bright value to 50000.
+    uint16_t barWidth = 4;
+    uint16_t speed = 1;
+    uint16_t width = 200;
+    uint16_t height = 50;
+    size_t numImages = 4;
+    uint16_t numBars = 25;
+    uint16_t darkValue = 100;
+    uint16_t brightValue = 50000;
+    MovingBarsSource source(width, height, numImages, numBars, barWidth, speed, darkValue, brightValue);
+
+    // Get the images and check them.
+    for (size_t i = 0; i < numImages; i++) {
+      std::shared_ptr<Image> image = source.getNextImage();
+      if (image == nullptr) {
+        return "Error getting image from source";
+      }
+      if (image->getWidth() != width || image->getHeight() != height) {
+        return "Image size mismatch";
+      }
+      for (uint16_t y = 0; y < height; y++) {
+        for (uint16_t x = 0; x < width; x++) {
+          uint16_t value = darkValue;
+          for (uint16_t bar = 0; bar < numBars; bar++) {
+            if ((x + i * speed) % width >= bar * barWidth && (x + i * speed) % width < (bar + 1) * barWidth) {
+              value = brightValue;
+            }
+          }
+          if (image->getData()->at(y * width + x) != value) {
+            return "Mismatched pixel value";
+          }
+        }
+      }
+    }
+  } catch (std::exception& e) {
+    return e.what();
+  }
+
+  return "";
+}
+
 std::string asdp::IS::Test()
 {
   std::string ret;
   ret = Image::Test();
   if (ret != "") {
-    return ret;
+    return "ImageSource test: Error testing Image: " + ret;
+  }
+  ret = asdp::IS::MovingBarsSource::Test();
+  if (ret.size() > 0) {
+    return "ImageSource test: Error testing MovingBarsSource: " + ret;
   }
 
-  return "@todo Test image source classes";
+  return "";
 }

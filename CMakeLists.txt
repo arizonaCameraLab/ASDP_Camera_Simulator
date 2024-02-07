@@ -26,6 +26,12 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 find_package(ASDP_Core REQUIRED)
 find_package(Doxygen)
+find_package(OpenMP)
+if(OPENMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
 
 #-----------------------------------------------------------------------------
 # Build options.
@@ -66,6 +72,19 @@ target_include_directories(ImageSource PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+set (CoreSimulator_HEADERS
+  CoreSimulator.h
+)
+set (CoreSimulator_SOURCES
+  CoreSimulator.cpp
+)
+add_library(CoreSimulator STATIC ${CoreSimulator_SOURCES} ${CoreSimulator_HEADERS})
+target_include_directories(CoreSimulator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(CoreSimulator ImageSource ASDP_Core::ASDP_Core)
+
 #-----------------------------------------------------------------------------
 # Build the simulator.
 
@@ -79,7 +98,7 @@ set (ASDPCoreSimulator_SOURCES
 )
 
 add_executable(ASDPCoreSimulator ${ASDPCoreSimulator_SOURCES} ${ASDPCoreSimulator_HEADERS})
-target_link_libraries(ASDPCoreSimulator ASDP_Core::ASDP_Core)
+target_link_libraries(ASDPCoreSimulator CoreSimulator ASDP_Core::ASDP_Core)
 
 install(TARGETS ASDPCoreSimulator EXPORT ${PROJECT_NAME}
   RUNTIME DESTINATION bin COMPONENT bin
@@ -104,7 +123,7 @@ if(BUILD_TESTS)
     add_executable (${APP} tests_cpp/${BASE}.cpp)
     set_target_properties(${APP} PROPERTIES FOLDER tests/C++)
     target_link_libraries(${APP} PRIVATE
-      ImageSource ASDP_Core::ASDP_Core
+      CoreSimulator
     )
     install(TARGETS ${APP} EXPORT ${PROJECT_NAME}
       RUNTIME DESTINATION bin

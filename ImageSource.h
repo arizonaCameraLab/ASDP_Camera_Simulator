@@ -46,7 +46,7 @@ public:
   /// @return True if the image was written successfully, false otherwise.
   bool writeToPGM(const std::string& filename) const;
 
-  /// @brief Test the image class.
+  /// @brief Test this class.
   /// @return An empty string on success, an error message on failure.
   static std::string Test();
 
@@ -71,7 +71,7 @@ public:
 };
 
 /// @brief Class that produces a sequence of images that are a moving set of bars.
-class MovingBars : public ImageSource {
+class MovingBarsSource : public ImageSource {
 public:
   /// @brief Constructor for a moving bars image source.
   /// @param width The width of the images.
@@ -79,16 +79,19 @@ public:
   /// @param numImages The number of images in the sequence.
   /// @param numBars The number of bars in the images.
   /// @param barWidth The width of the bars in the images.
-  /// @param barHeight The height of the bars in the images.
   /// @param speed The speed of the bars in pixels per frame.
-  MovingBars(uint16_t width, uint16_t height, size_t numImages,
-    uint16_t numBars, uint16_t barWidth, uint16_t barHeight, uint16_t speed,
+  MovingBarsSource(uint16_t width, uint16_t height, size_t numImages,
+    uint16_t numBars, uint16_t barWidth, uint16_t speed,
     uint16_t darkValue = 0, uint16_t brightValue = UINT16_MAX);
 
   /// @brief Get the next image from the source.
   /// @param loop If true, the source will loop back to the beginning when it reaches the end.
   /// @return The next image from the source.
   std::shared_ptr<Image> getNextImage(bool loop = true) override;
+
+  /// @brief Test this class.
+  /// @return An empty string on success, an error message on failure.
+  static std::string Test();
 
 protected:
   std::vector< std::shared_ptr<Image> > m_images;  ///< The images in the sequence.
