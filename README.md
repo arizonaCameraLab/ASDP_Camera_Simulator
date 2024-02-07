@@ -8,7 +8,7 @@ for the Apache Strap-Down Pilotage program.
 **Required:** The ASDP_CoreSimulator requires the ASDP_Core library to have been
 installed before it is built.  This installs by default in a known system location that can
 be found automatically.  The library source can be obtained using:
-`git clone https://github.com/reliasolve/ASDP_CoreSimulator`
+`git clone https://github.com/reliasolve/ASDP_Core`
 
 **Build:** ASDP_CoreSimulator uses CMake to configure the builds (though other build
 systems could be used).  On Ubuntu Linux, this can be done as follows
