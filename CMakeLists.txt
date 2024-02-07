@@ -52,12 +52,29 @@ if (BUILD_DOXYGEN)
 endif (BUILD_DOXYGEN)
 
 #-----------------------------------------------------------------------------
+# Build the libraries.
+
+set (ImageSource_HEADERS
+  ImageSource.h
+)
+set (ImageSource_SOURCES
+  ImageSource.cpp
+)
+add_library(ImageSource STATIC ${ImageSource_SOURCES} ${ImageSource_HEADERS})
+target_include_directories(ImageSource PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
+
+#-----------------------------------------------------------------------------
 # Build the simulator.
 
 set (ASDPCoreSimulator_HEADERS
+	ImageSource.h
 )
 
 set (ASDPCoreSimulator_SOURCES
+	ImageSource.cpp
 	ASDPCoreSimulator.cpp
 )
 
@@ -80,16 +97,14 @@ if(BUILD_TESTS)
   enable_testing()
 
   set (CPP_TESTS
+    test_ImageSource
   )
   foreach (BASE ${CPP_TESTS})
     set (APP ${BASE})
     add_executable (${APP} tests_cpp/${BASE}.cpp)
     set_target_properties(${APP} PROPERTIES FOLDER tests/C++)
-    target_include_directories(${APP} PRIVATE
-      ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-    target_link_libraries(${APP}
-      ASDP_Core::ASDP_Core
+    target_link_libraries(${APP} PRIVATE
+      ImageSource ASDP_Core::ASDP_Core
     )
     install(TARGETS ${APP} EXPORT ${PROJECT_NAME}
       RUNTIME DESTINATION bin
