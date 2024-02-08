@@ -100,6 +100,8 @@ public:
   /// @param numBars The number of bars in the images.
   /// @param barWidth The width of the bars in the images.
   /// @param speed The speed of the bars in pixels per frame.
+  /// @param darkValue The value for the dark parts of the bars.
+  /// @param brightValue The value for the bright parts of the bars.
   MovingBarsSource(uint16_t width, uint16_t height, size_t numImages,
     uint16_t numBars, uint16_t barWidth, uint16_t speed,
     uint16_t darkValue = 0, uint16_t brightValue = UINT16_MAX);

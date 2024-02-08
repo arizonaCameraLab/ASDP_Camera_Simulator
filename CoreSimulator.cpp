@@ -4,6 +4,8 @@
 
 #include "CoreSimulator.h"
 #include <iostream>
+#include <algorithm>
+#include <limits>
 
 using namespace asdp;
 
@@ -52,32 +54,93 @@ CoreSimulator::CoreSimulator(uint32_t serialNumber, const std::string& IP,
 {
 }
 
-std::shared_ptr<StreamWriter> CoreSimulator::getWriter(const StreamEndpoint& endpoint)
+asdp::Time CoreSimulator::getNewTimeout()
 {
-  // Look up the sender for the endpoint if there is one.
-  auto it = m_writers.find(endpoint);
-  if (it != m_writers.end()) {
-    return it->second;
+  Time time = { std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max() };
+  if (m_keepAliveInterval <= 0) {
+    return time;
+  }
+
+  // Get the current time.
+  Status status = m_timer->GetCoreTime(time);
+  if (status != OKAY) {
+    m_error = "Failed to get core time: " + ErrorMessage(status);
+    return time;
+  }
+
+  // See how much to increase the current time by.
+  uint32_t seconds = static_cast<uint32_t>(m_keepAliveInterval);
+  uint32_t microseconds = static_cast<uint32_t>(
+    (m_keepAliveInterval - static_cast<float>(static_cast<uint32_t>(m_keepAliveInterval))) * 1000000);
+  Time increase = { seconds, microseconds };
+  return time + increase;
+}
+
+asdp::CoreSimulator::WriterInfo &CoreSimulator::getWriter(
+  const StreamEndpoint& endpoint, std::list<WriterInfo>& baseList)
+{
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+  // See if there is already an entry for this endpoint in the list we're trying to add
+  // it to.  If there is, we're done.
+  auto it = std::find_if(baseList.begin(), baseList.end(),
+       [&endpoint](const WriterInfo& info) { return info.endpoint == endpoint; });
+  if (it != baseList.end()) {
+    it->timeOut = getNewTimeout();
+    return *it;
+  }
+
+  // See if there is already an entry for this endpoint in the other lists.  If there is,
+  // add it to the list above.
+  if (&baseList != &m_stateWriters) if (m_stateWriters.size() > 0) {
+    it = std::find_if(m_stateWriters.begin(), m_stateWriters.end(),
+              [&endpoint](const WriterInfo& info) { return info.endpoint == endpoint; });
+    if (it != m_stateWriters.end()) {
+      baseList.push_back(*it);
+      it->timeOut = getNewTimeout();
+      return *it;
+    }
+  }
+  if (&baseList != &m_eventWriters) if (m_eventWriters.size() > 0) {
+    it = std::find_if(m_eventWriters.begin(), m_eventWriters.end(),
+                   [&endpoint](const WriterInfo& info) { return info.endpoint == endpoint; });
+    if (it != m_eventWriters.end()) {
+      baseList.push_back(*it);
+      it->timeOut = getNewTimeout();
+      return *it;
+    }
+  }
+  if (&baseList != &m_subregionWriters) if (m_subregionWriters.size() > 0) {
+    it = std::find_if(m_subregionWriters.begin(), m_subregionWriters.end(),
+                        [&endpoint](const WriterInfo& info) { return info.endpoint == endpoint; });
+    if (it != m_subregionWriters.end()) {
+      baseList.push_back(*it);
+      it->timeOut = getNewTimeout();
+      return *it;
+    }
   }
 
   // Create a new sender and writer for the endpoint because there is not one.
+  // Add it to the list.
   std::shared_ptr<Sender> sender(new SenderUDP(endpoint));
   Status status = sender->GetConstructorStatus();
   if (status != OKAY) {
     m_error = "Failed to create SenderUDP: " + ErrorMessage(status);
-    return nullptr;
   }
   std::shared_ptr<StreamWriter> writer(new StreamWriter(sender, m_timer));
   status = writer->GetConstructorStatus();
   if (status != OKAY) {
     m_error = "Failed to create StreamWriter: " + ErrorMessage(status);
-    return nullptr;
   }
+  WriterInfo wi;
+  wi.endpoint = endpoint;
+  wi.writer = writer;
   if (m_verbosity >= 1) {
     std::cout << "Created StreamWriter for " << endpoint << std::endl;
   }
-  m_writers[endpoint] = writer;
-  return writer;
+  baseList.push_back(wi);
+  wi.timeOut = getNewTimeout();
+  return baseList.back();
 }
 
 void CoreSimulator::sendInvalidCommandMessage(OpCode opCode)
@@ -85,18 +148,22 @@ void CoreSimulator::sendInvalidCommandMessage(OpCode opCode)
   if (m_verbosity >= 1) {
     std::cout << "Invalid opcode received: " << opCode << std::endl;
   }
+
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
-  if (m_eventWriter) {
+  for (auto writer : m_eventWriters) {
+    uint8_t priority = 0;
+    EventID type = INVALID_OPERATION;
+    if (writer.verbosity < type) {
+      continue;
+    }
     std::shared_ptr<StreamPacket> packet;
-    Status status = m_eventWriter->GetCurrentPacket(packet);
+    Status status = writer.writer->GetCurrentPacket(packet);
     if (status != OKAY) {
-      m_error = "Error getting current packet from m_eventWriter: " + ErrorMessage(status);
+      m_error = "Error getting current packet from m_eventWriters: " + ErrorMessage(status);
       return;
     }
     Time timeCode;
     m_timer->GetCoreTime(timeCode);
-    uint8_t priority = 0;
-    EventID type = INVALID_OPERATION;
     MessageEvent message(*packet, timeCode, priority, type, std::to_string(opCode));
     if (message.GetConstructorStatus() != OKAY) {
       m_error = "Error constructing MessageEvent: " + ErrorMessage(message.GetConstructorStatus());
@@ -104,9 +171,9 @@ void CoreSimulator::sendInvalidCommandMessage(OpCode opCode)
     }
 
     // Send the packet immediately.
-    status = m_eventWriter->Flush();
+    status = writer.writer->Flush();
     if (status != OKAY) {
-      m_error = "Error flushing m_eventWriter: " + ErrorMessage(status);
+      m_error = "Error flushing m_eventWriters: " + ErrorMessage(status);
       return;
     }
   }
@@ -488,14 +555,37 @@ void CoreSimulator::doStreamEvents(const CommandPacketStreamEvents& command)
     m_error = "Failed to get endpoint: " + ErrorMessage(status);
     return;
   }
+
+  uint32_t verbosity;
+  status = command.GetVerbosity(verbosity);
+  if (status != OKAY) {
+    m_error = "Failed to get verbosity: " + ErrorMessage(status);
+    return;
+  }
+
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
-  m_eventWriter = getWriter(endpoint);
+
+  // Create or get the basic writer for the endpoint.
+  WriterInfo &wi = getWriter(endpoint, m_eventWriters);
+
+  // Fill in the specific entries for streaming events.
+  wi.verbosity = verbosity;
 }
 
 void CoreSimulator::doCancelEvents(const CommandPacketCancelEvents& command)
 {
+  // Get the endpoint to cancel.
+  StreamEndpoint endpoint;
+  Status status = command.GetEndpoint(endpoint);
+  if (status != OKAY) {
+    m_error = "Failed to get endpoint: " + ErrorMessage(status);
+    return;
+  }
+
+  // Remove it from the list if it is there.
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
-  m_eventWriter.reset();
+  auto it = std::find_if(m_eventWriters.begin(), m_eventWriters.end(),
+          [&endpoint](const WriterInfo& info) { return info.endpoint == endpoint; });
 }
 
 void CoreSimulator::doStreamSubregions(const CommandPacketStreamSubregions& command)
