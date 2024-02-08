@@ -5,6 +5,8 @@
 #pragma once
 #include <asdp_api.h>
 #include <ImageSource.h>
+#include <map>
+#include <mutex>
 
 namespace asdp {
 
@@ -14,6 +16,7 @@ public:
   /// @param serialNumber The serial number of the server
   /// @param IP The IP address of the server
   /// @param sources The image sources to be used by the server
+  /// @param verbosity The verbosity level of the server, 0 for no verbosity, higher for more verbosity.
   CoreSimulator(uint32_t serialNumber, const std::string &IP,
     std::vector< std::shared_ptr< asdp::IS::ImageSource> > sources,
     int verbosity = 0);
@@ -26,13 +29,29 @@ public:
   std::string run();
 
 protected:
-  std::vector< std::shared_ptr< asdp::IS::ImageSource> > m_sources; ///< The image sources to be used by the server
   int m_verbosity; ///< The verbosity level of the server, 0 for no verbosity, higher for more verbosity.
   std::string m_error; ///< The error message when the server stops running.
+  std::recursive_mutex m_mutex; ///< Mutex to protect the state variables.
 
-  float m_keepAliveInterval; ///< The keep alive interval in seconds.
+  // State variables
+  std::vector< std::shared_ptr< asdp::IS::ImageSource> > m_sources; ///< The image sources to be used by the server
+  std::vector<uint16_t> m_features; ///< The features of the server (filled in when added)
+  float m_keepAliveInterval;        ///< The keep alive interval in seconds.
+  float m_framePeriod;              ///< The frame period in seconds.
+  std::map<StreamEndpoint, std::shared_ptr<StreamWriter> > m_writers; ///< Existing StreamWriters looked up by StreamEndpoint.
 
-  // Member functions to implement the commands.
+  /// @brief Create or get an existing StreamWriter for the specified endpoint.
+  /// @param endpoint The endpoint for the sender.
+  /// @return The StreamWriter for the specified endpoint.
+  std::shared_ptr<StreamWriter> getWriter(const StreamEndpoint& endpoint);
+
+  std::shared_ptr<StreamWriter> m_eventWriter; ///< The StreamWriter for events, if any.
+
+  /// @brief Send an invalid-command event to the event stream.
+  /// @param opCode The invalid command opcode.
+  void sendInvalidCommandMessage(OpCode opCode);
+
+  // Methods to implement the commands.
 
   /// @brief Implement the specified command.
   void doReset(const CommandPacketReset&);

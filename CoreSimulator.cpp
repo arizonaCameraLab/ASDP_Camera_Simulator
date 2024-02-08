@@ -48,7 +48,68 @@ CoreSimulator::CoreSimulator(uint32_t serialNumber, const std::string& IP,
   , m_sources(sources)
   , m_verbosity(verbosity)
   , m_keepAliveInterval(0)
+  , m_framePeriod(1/60.0f)
 {
+}
+
+std::shared_ptr<StreamWriter> CoreSimulator::getWriter(const StreamEndpoint& endpoint)
+{
+  // Look up the sender for the endpoint if there is one.
+  auto it = m_writers.find(endpoint);
+  if (it != m_writers.end()) {
+    return it->second;
+  }
+
+  // Create a new sender and writer for the endpoint because there is not one.
+  std::shared_ptr<Sender> sender(new SenderUDP(endpoint));
+  Status status = sender->GetConstructorStatus();
+  if (status != OKAY) {
+    m_error = "Failed to create SenderUDP: " + ErrorMessage(status);
+    return nullptr;
+  }
+  std::shared_ptr<StreamWriter> writer(new StreamWriter(sender, m_timer));
+  status = writer->GetConstructorStatus();
+  if (status != OKAY) {
+    m_error = "Failed to create StreamWriter: " + ErrorMessage(status);
+    return nullptr;
+  }
+  if (m_verbosity >= 1) {
+    std::cout << "Created StreamWriter for " << endpoint << std::endl;
+  }
+  m_writers[endpoint] = writer;
+  return writer;
+}
+
+void CoreSimulator::sendInvalidCommandMessage(OpCode opCode)
+{
+  if (m_verbosity >= 1) {
+    std::cout << "Invalid opcode received: " << opCode << std::endl;
+  }
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  if (m_eventWriter) {
+    std::shared_ptr<StreamPacket> packet;
+    Status status = m_eventWriter->GetCurrentPacket(packet);
+    if (status != OKAY) {
+      m_error = "Error getting current packet from m_eventWriter: " + ErrorMessage(status);
+      return;
+    }
+    Time timeCode;
+    m_timer->GetCoreTime(timeCode);
+    uint8_t priority = 0;
+    EventID type = INVALID_OPERATION;
+    MessageEvent message(*packet, timeCode, priority, type, std::to_string(opCode));
+    if (message.GetConstructorStatus() != OKAY) {
+      m_error = "Error constructing MessageEvent: " + ErrorMessage(message.GetConstructorStatus());
+      return;
+    }
+
+    // Send the packet immediately.
+    status = m_eventWriter->Flush();
+    if (status != OKAY) {
+      m_error = "Error flushing m_eventWriter: " + ErrorMessage(status);
+      return;
+    }
+  }
 }
 
 std::string CoreSimulator::run()
@@ -357,32 +418,38 @@ void CoreSimulator::doCancelAllStreams(const CommandPacketCancelAllStreams& comm
 
 void CoreSimulator::doStartRecording(const CommandPacketStartRecording& command)
 {
-  m_error = "@todo implement doStartRecording";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(START_RECORDING);
 }
 
 void CoreSimulator::doStopRecording(const CommandPacketStopRecording& command)
 {
-  m_error = "@todo implement doStopRecording";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(STOP_RECORDING);
 }
 
 void CoreSimulator::doSetStartUpRecordingState(const CommandPacketSetStartUpRecordingState& command)
 {
-  m_error = "@todo implement doSetStartUpRecordingState";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(SET_START_UP_RECORDING_STATE);
 }
 
 void CoreSimulator::doStartReplay(const CommandPacketStartReplay& command)
 {
-  m_error = "@todo implement doStartReplay";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(START_REPLAY);
 }
 
 void CoreSimulator::doPauseReplay(const CommandPacketPauseReplay& command)
 {
-  m_error = "@todo implement doPauseReplay";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(PAUSE_REPLAY);
 }
 
 void CoreSimulator::doStopReplay(const CommandPacketStopReplay& command)
 {
-  m_error = "@todo implement doStopReplay";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(STOP_REPLAY);
 }
 
 void CoreSimulator::doSetKeepAliveInterval(const CommandPacketKeepaliveInterval& command)
@@ -415,12 +482,20 @@ void CoreSimulator::doSoftwareTrigger(const CommandPacketSoftwareTrigger& comman
 
 void CoreSimulator::doStreamEvents(const CommandPacketStreamEvents& command)
 {
-  m_error = "@todo implement doStreamEvents";
+  StreamEndpoint endpoint;
+  Status status = command.GetEndpoint(endpoint);
+  if (status != OKAY) {
+    m_error = "Failed to get endpoint: " + ErrorMessage(status);
+    return;
+  }
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  m_eventWriter = getWriter(endpoint);
 }
 
 void CoreSimulator::doCancelEvents(const CommandPacketCancelEvents& command)
 {
-  m_error = "@todo implement doCancelEvents";
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  m_eventWriter.reset();
 }
 
 void CoreSimulator::doStreamSubregions(const CommandPacketStreamSubregions& command)
@@ -435,35 +510,42 @@ void CoreSimulator::doCancelSubregions(const CommandPacketCancelSubregions& comm
 
 void CoreSimulator::doEraseAllStoredStreams(const CommandPacketEraseAllStoredStreams& command)
 {
-  m_error = "@todo implement doEraseAllStoredStreams";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(ERASE_ALL_STORED_STREAMS);
 }
 
 void CoreSimulator::doListStoredStreams(const CommandPacketStreamStoredList& command)
 {
-  m_error = "@todo implement doListStoredStreams";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(LIST_STORED_STREAMS);
 }
 
 void CoreSimulator::doEraseStoredStream(const CommandPacketEraseStoredStream& command)
 {
-  m_error = "@todo implement doEraseStoredStream";
+  // This server does not yet support this operation.
+  sendInvalidCommandMessage(ERASE_STORED_STREAM);
 }
 
 void CoreSimulator::doStreamTemperatures(const CommandPacketStreamTemperatures& command)
 {
-  m_error = "@todo implement doStreamTemperatures";
+  // This server does not yet support streaming temperatures.
+  sendInvalidCommandMessage(STREAM_TEMPERATURES);
 }
 
 void CoreSimulator::doCancelTemperatures(const CommandPacketCancelTemperatures& command)
 {
-  m_error = "@todo implement doCancelTemperatures";
+  // This server does not yet support streaming temperatures.
+  sendInvalidCommandMessage(CANCEL_TEMPERATURES);
 }
 
 void CoreSimulator::doStreamPoses(const CommandPacketStreamPoses& command)
 {
-  m_error = "@todo implement doStreamPoses";
+  // This server does not yet support streaming poses.
+  sendInvalidCommandMessage(STREAM_POSES);
 }
 
 void CoreSimulator::doCancelPoses(const CommandPacketCancelPoses& command)
 {
-  m_error = "@todo implement doCancelPoses";
+  // This server does not yet support streaming poses.
+  sendInvalidCommandMessage(CANCEL_POSES);
 }

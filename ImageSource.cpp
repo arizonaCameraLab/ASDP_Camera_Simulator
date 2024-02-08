@@ -176,7 +176,8 @@ std::string Image::Test()
 MovingBarsSource::MovingBarsSource(uint16_t width, uint16_t height, size_t numImages,
   uint16_t numBars, uint16_t barWidth, uint16_t speed,
   uint16_t darkValue, uint16_t brightValue)
-  : m_currentIndex(0)
+  : ImageSource(width, height)
+  , m_currentIndex(0)
 {
   // Create each image in the sequence, filling in the moving bars for each one.
   for (size_t i = 0; i < numImages; i++) {

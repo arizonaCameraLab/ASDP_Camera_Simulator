@@ -64,10 +64,30 @@ protected:
 /// @brief Base class for image sources that defines the require methods.
 class ImageSource {
 public:
+  /// @brief Constructor for an image source.
+  /// @param width The width of the images.
+  /// @param height The height of the images.
+  ImageSource(uint16_t width, uint16_t height)
+    : m_width(width), m_height(height) {};
+
   /// @brief Get the next image from the source.
   /// @param loop If true, the source will loop back to the beginning when it reaches the end.
   /// @return The next image from the source, or nullptr if at the end.
   virtual std::shared_ptr<Image> getNextImage(bool loop = true) = 0;
+
+  /// @brief Get the width of the images.
+  /// @return The width of the images.
+  virtual uint16_t getWidth() const { return m_width; }
+
+  /// @brief Get the height of the images.
+  /// @return The height of the images.
+  virtual uint16_t getHeight() const { return m_height; }
+
+protected:
+  ImageSource() = delete;  ///< No default constructor.
+
+  uint16_t m_width;             ///< The width of the images.
+  uint16_t m_height;            ///< The height of the images.
 };
 
 /// @brief Class that produces a sequence of images that are a moving set of bars.
