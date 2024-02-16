@@ -9,7 +9,6 @@
 
 using namespace asdp;
 
-
 CoreSimulator::CoreSimulator(uint32_t serialNumber, const std::string& IP,
   std::vector< std::shared_ptr< asdp::IS::ImageSource> > sources,
   int verbosity)
@@ -19,32 +18,27 @@ CoreSimulator::CoreSimulator(uint32_t serialNumber, const std::string& IP,
 {
 }
 
-void CoreSimulator::doReset(const CommandPacketReset& command)
+void CoreSimulator::doReset(const CommandPacketReset& command, ClientState& client)
 {
   m_error = "@todo implement doReset";
 }
 
-void CoreSimulator::doCancelAllStreams(const CommandPacketCancelAllStreams& command)
-{
-  m_error = "@todo implement doCancelAllStreams";
-}
-
-void CoreSimulator::doConfigureTrigger(const CommandPacketConfigureTrigger& command)
+void CoreSimulator::doConfigureTrigger(const CommandPacketConfigureTrigger& command, ClientState& client)
 {
   m_error = "@todo implement doConfigureTrigger";
 }
 
-void CoreSimulator::doSoftwareTrigger(const CommandPacketSoftwareTrigger& command)
+void CoreSimulator::doSoftwareTrigger(const CommandPacketSoftwareTrigger& command, ClientState& client)
 {
   m_error = "@todo implement doSoftwareTrigger";
 }
 
-void CoreSimulator::doStreamSubregions(const CommandPacketStreamSubregions& command)
+void CoreSimulator::doStreamSubregion(const CommandPacketStreamSubregion& command, ClientState& client)
 {
-  m_error = "@todo implement doStreamSubregions";
+  m_error = "@todo implement doStreamSubregion";
 }
 
-void CoreSimulator::doCancelSubregions(const CommandPacketCancelSubregions& command)
+void CoreSimulator::doCancelSubregion(const CommandPacketCancelSubregion& command, ClientState& client)
 {
-  m_error = "@todo implement doCancelSubregions";
+  m_error = "@todo implement doCancelSubregion";
 }

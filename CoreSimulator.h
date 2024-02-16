@@ -11,6 +11,7 @@
 
 namespace asdp {
 
+/// @brief Simulate a server that can be used to test transfer speeds and clients.
 class CoreSimulator : public CoreServerBase {
 public:
   /// @brief Constructor
@@ -29,27 +30,32 @@ protected:
   float m_framePeriod;              ///< The frame period in seconds.
 
   //=============================================================================
-  // Overrise methods to implement the commands as needed.
+  // Override methods to implement the commands as needed.
 
   /// @brief Implement the specified command.
-  void doReset(const CommandPacketReset&) override;
+  /// @param command The command packet to implement.
+  /// @param client The client that the command is coming from.
+  void doReset(const CommandPacketReset&, ClientState& client) override;
 
   /// @brief Implement the specified command.
-  void doCancelAllStreams(const CommandPacketCancelAllStreams&) override;
+  /// @param command The command packet to implement.
+  /// @param client The client that the command is coming from.
+  void doConfigureTrigger(const CommandPacketConfigureTrigger&, ClientState& client) override;
 
   /// @brief Implement the specified command.
-  void doConfigureTrigger(const CommandPacketConfigureTrigger&) override;
+  /// @param command The command packet to implement.
+  /// @param client The client that the command is coming from.
+  void doSoftwareTrigger(const CommandPacketSoftwareTrigger&, ClientState& client) override;
 
   /// @brief Implement the specified command.
-  void doSoftwareTrigger(const CommandPacketSoftwareTrigger&) override;
+  /// @param command The command packet to implement.
+  /// @param client The client that the command is coming from.
+  void doStreamSubregion(const CommandPacketStreamSubregion&, ClientState& client) override;
 
   /// @brief Implement the specified command.
-  void doStreamSubregions(const CommandPacketStreamSubregions&) override;
-
-  /// @brief Implement the specified command.
-  void doCancelSubregions(const CommandPacketCancelSubregions&) override;
-
-
+  /// @param command The command packet to implement.
+  /// @param client The client that the command is coming from.
+  void doCancelSubregion(const CommandPacketCancelSubregion&, ClientState& client) override;
 };
 
 } // namespace asdp
