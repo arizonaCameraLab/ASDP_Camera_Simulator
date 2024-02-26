@@ -12,7 +12,7 @@ using namespace asdp;
 CoreSimulator::CoreSimulator(uint32_t serialNumber, const std::string& IP,
   std::vector< std::shared_ptr< asdp::IS::ImageSource> > sources,
   int verbosity)
-  : CoreServerBase(serialNumber, IP, verbosity)
+  : CoreServerBase(serialNumber, IP, 10102, 10101, 9000 - 28, verbosity)
   , m_sources(sources)
   , m_framePeriod(1/60.0f)
 {
