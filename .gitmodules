@@ -1,0 +1,3 @@
+[submodule "ASDP_BSP_API"]
+	path = ASDP_BSP_API
+	url = https://github.com/arizonaCameraLab/ASDP_BSP_API
