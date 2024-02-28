@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.0)
-project(ASDP_CoreSimulator LANGUAGES CXX)
+project(ASDP_BSP LANGUAGES CXX)
 
 #-----------------------------------------------------------------------------
 # Set your favorite C++ standard for compiling the internal files.  The library
@@ -10,6 +10,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #-----------------------------------------------------------------------------
 if(WIN32)
     add_definitions(-DNOMINMAX)
+    # Make Windows export all symbols by default, which will create the required .lib file.
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif(WIN32)
 
 #-----------------------------------------------------------------------------
@@ -24,7 +26,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #-----------------------------------------------------------------------------
 # Checking for optional and required packages
 
-find_package(ASDP_Core REQUIRED)
 find_package(Doxygen)
 find_package(OpenMP)
 if(OPENMP_FOUND)
@@ -58,7 +59,7 @@ if (BUILD_DOXYGEN)
 endif (BUILD_DOXYGEN)
 
 #-----------------------------------------------------------------------------
-# Build the libraries.
+# Build the helper static libraries.
 
 set (ImageSource_HEADERS
   ImageSource.h
@@ -72,40 +73,55 @@ target_include_directories(ImageSource PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-set (CoreSimulator_HEADERS
-  CoreSimulator.h
+#-----------------------------------------------------------------------------
+# Build the shared library to implement ASDP_BSP, which is in the ASDP_BSP_API submodule directory.
+
+set (ASDP_Camera_Simulator_HEADERS
 )
-set (CoreSimulator_SOURCES
-  CoreSimulator.cpp
+
+set (ASDP_Camera_Simulator_SOURCES
+	ASDP_Camera_Simulator.cpp
 )
-add_library(CoreSimulator STATIC ${CoreSimulator_SOURCES} ${CoreSimulator_HEADERS})
-target_include_directories(CoreSimulator PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+
+add_library(ASDP_BSP SHARED ${ASDP_Camera_Simulator_SOURCES} ${ASDP_Camera_Simulator_HEADERS})
+target_link_libraries(ASDP_BSP PRIVATE ImageSource)
+target_include_directories(ASDP_BSP PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(CoreSimulator ImageSource ASDP_Core::ASDP_Core)
 
-#-----------------------------------------------------------------------------
-# Build the simulator.
-
-set (ASDPCoreSimulator_HEADERS
-	ImageSource.h
-)
-
-set (ASDPCoreSimulator_SOURCES
-	ImageSource.cpp
-	ASDPCoreSimulator.cpp
-)
-
-add_executable(ASDPCoreSimulator ${ASDPCoreSimulator_SOURCES} ${ASDPCoreSimulator_HEADERS})
-target_link_libraries(ASDPCoreSimulator CoreSimulator ASDP_Core::ASDP_Core)
-
-install(TARGETS ASDPCoreSimulator EXPORT ${PROJECT_NAME}
-  RUNTIME DESTINATION bin COMPONENT bin
+include(GNUInstallDirs)
+install(TARGETS ASDP_BSP EXPORT ${PROJECT_NAME}
+  RUNTIME DESTINATION bin COMPONENT lib
   LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT lib
   ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT lib
   INCLUDES DESTINATION include
   PUBLIC_HEADER DESTINATION include
+)
+
+# Configure the project for use by client projects using CMake
+# This makes the project available as a package for use with find_package()
+# and provides the configuration for the build tree.
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+  VERSION 1.0
+  COMPATIBILITY AnyNewerVersion
+)
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/cmake/Config.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+)
+install(EXPORT ${PROJECT_NAME}
+  FILE ${PROJECT_NAME}Targets.cmake
+  NAMESPACE ${PROJECT_NAME}::
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+)
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
 )
 
 #-----------------------------------------------------------------------------
@@ -123,7 +139,8 @@ if(BUILD_TESTS)
     add_executable (${APP} tests_cpp/${BASE}.cpp)
     set_target_properties(${APP} PROPERTIES FOLDER tests/C++)
     target_link_libraries(${APP} PRIVATE
-      CoreSimulator
+      ASDP_BSP
+      ImageSource
     )
     install(TARGETS ${APP} EXPORT ${PROJECT_NAME}
       RUNTIME DESTINATION bin
@@ -132,4 +149,3 @@ if(BUILD_TESTS)
   endforeach (BASE)
 
 endif(BUILD_TESTS)
-
