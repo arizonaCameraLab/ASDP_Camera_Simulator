@@ -80,6 +80,12 @@ target_include_directories(ImageSource PUBLIC
 # Build the shared library to implement ASDP_BSP, which is in the ASDP_BSP_API submodule directory.
 
 set (ASDP_Camera_Simulator_HEADERS
+  ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/BspInclude.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/Timing.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/Temperature.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/Pose.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/Camera.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API/UdpInserter.hpp
 )
 
 set (ASDP_Camera_Simulator_SOURCES
@@ -92,6 +98,7 @@ target_include_directories(ASDP_BSP PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API>
   $<INSTALL_INTERFACE:include>
 )
+set_target_properties(ASDP_BSP PROPERTIES PUBLIC_HEADER "${ASDP_Camera_Simulator_HEADERS}")
 
 include(GNUInstallDirs)
 install(TARGETS ASDP_BSP EXPORT ${PROJECT_NAME}

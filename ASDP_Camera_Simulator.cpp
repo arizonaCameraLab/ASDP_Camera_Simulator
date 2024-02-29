@@ -82,6 +82,37 @@ protected:
   std::chrono::time_point<std::chrono::steady_clock> lastReportTime;
 };
 
+class Pose {
+public:
+  Pose(uint16_t ID, float period) : ID(ID), period(period) {}
+
+  bool ReportPose(Bsp::Pose::pose_s& report) {
+    std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
+    std::chrono::duration<float> elapsed = now - lastReportTime;
+    if (elapsed.count() < period) {
+      return false;
+    }
+    lastReportTime = now;
+    report.Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
+    report.Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    report.Longitude = 0;
+    report.Latitude = 0;
+    report.Altitude = 0;
+    for (size_t i = 0; i < 3; i++) {
+      report.Rotation[i] = 0.0;
+      report.Velocity[i] = 0.0;
+      report.RotationVelocity[i] = 0.0;
+    }
+    report.DeviceID = ID;
+    return true;
+  }
+
+protected:
+  uint16_t ID;
+  float period;
+  std::chrono::time_point<std::chrono::steady_clock> lastReportTime;
+};
+
 //==============================================================================
 // Start-up code that reads the configuration file and sets up things that are
 // needed for the rest of the code.
@@ -107,6 +138,7 @@ public:
   std::vector<Bsp::Pose::pose_report_s> PoseDeviceConfigurations;
   uint32_t NumCameras = 0;
   std::vector<TemperatureSensor> TemperatureSensors;
+  std::vector<Pose> Posers;
 };
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
@@ -134,13 +166,13 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     catch (...) {};
   }
 
+  uint32_t numPosers = 0;
   if (configMap.find("Pose") != configMap.end()) {
     std::map<std::string, std::string> pose = configMap.at("Pose");
-    uint32_t numPoses = 0;
     try {
-      numPoses = std::stoi(pose.at("NumPoses"));
+      numPosers = std::stoi(pose.at("NumPoses"));
     } catch (...) {}
-    for (uint16_t i = 0; i < numPoses; i++) {
+    for (uint16_t i = 0; i < numPosers; i++) {
       Bsp::Pose::pose_report_s report;
       std::string key = "Pose" + std::to_string(i) + "Orientation";
       if (pose.find(key) != pose.end()) {
@@ -172,6 +204,10 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     TemperatureSensors.push_back(TemperatureSensor(0, i, 25.0, 0.25));
   }
 
+  // Create objects for the Posers
+  for (size_t i = 1; i <= numPosers; i++) {
+    Posers.push_back(Pose(i, 0.25));
+  }
 
   /// @todo Implement below here.
 }
@@ -261,7 +297,12 @@ namespace Bsp {
 
     std::vector<pose_s> GetNewPoses(void) {
       std::vector<pose_s> poses;
-      /// @todo
+      Bsp::Pose::pose_s report;
+      for (auto& p : state.Posers) {
+        if (p.ReportPose(report)) {
+          poses.push_back(report);
+        }
+      }
       return poses;
     }
 
