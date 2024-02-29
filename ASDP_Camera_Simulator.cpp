@@ -4,6 +4,7 @@
 #include <sstream>
 #include <filesystem>
 #include <vector>
+#include <chrono>
 #include <BspInclude.hpp>
 
 //==============================================================================
@@ -50,6 +51,38 @@ static std::map<std::string, std::map<std::string, std::string>> ParseConfFile(c
 }
 
 //==============================================================================
+// Helper classes that implement behaviors.
+
+class TemperatureSensor {
+public:
+  TemperatureSensor(uint16_t camera, uint16_t ID, float temperature, float period)
+    : camera(camera), ID(ID), temperature(temperature), period(period) {}
+
+  bool ReportTemperature(uint16_t &camera, uint16_t &ID, float& temperature,
+                         uint32_t &seconds, uint32_t &microseconds) {
+    std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
+    std::chrono::duration<float> elapsed = now - lastReportTime;
+    if (elapsed.count() < period) {
+      return false;
+    }
+    lastReportTime = now;
+    camera = this->camera;
+    ID = this->ID;
+    temperature = this->temperature;
+    seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
+    microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    return true;
+  }
+
+protected:
+  uint16_t camera;
+  uint16_t ID;
+  float temperature;
+  float period;
+  std::chrono::time_point<std::chrono::steady_clock> lastReportTime;
+};
+
+//==============================================================================
 // Start-up code that reads the configuration file and sets up things that are
 // needed for the rest of the code.
 
@@ -73,6 +106,7 @@ public:
   uint32_t NumSystemTemperatureSensors = 0;
   std::vector<Bsp::Pose::pose_report_s> PoseDeviceConfigurations;
   uint32_t NumCameras = 0;
+  std::vector<TemperatureSensor> TemperatureSensors;
 };
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
@@ -128,6 +162,17 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     } catch (...) {}
   }
 
+  // Create objects for the temperature sensors.
+  for (size_t i = 1; i <= NumTemperatureSensorsPerCamera; i++) {
+    for (size_t c = 1; c <= NumCameras; c++) {
+      TemperatureSensors.push_back(TemperatureSensor(c, i, 25.0, 0.25));
+    }
+  }
+  for (size_t i = 1; i <= NumSystemTemperatureSensors; i++) {
+    TemperatureSensors.push_back(TemperatureSensor(0, i, 25.0, 0.25));
+  }
+
+
   /// @todo Implement below here.
 }
 
@@ -158,15 +203,18 @@ namespace Bsp {
     }
 
     void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
-      Seconds = 0;
-      Microseconds = 0;
+      auto now = std::chrono::system_clock::now();
+      Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
+      Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
     }
 
     bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
+      /// @todo
       return false;
     }
 
     bool SoftwareTrigger(uint8_t ID, uint32_t Seconds, uint32_t Microseconds) {
+      /// @todo
       return false;
     }
 
@@ -185,6 +233,20 @@ namespace Bsp {
 
     std::vector<temp_s> GetNewTemperatures(void) {
       std::vector<temp_s> temps;
+      for (auto& sensor : state.TemperatureSensors) {
+        uint16_t camera, ID;
+        float temperature;
+        uint32_t seconds, microseconds;
+        if (sensor.ReportTemperature(camera, ID, temperature, seconds, microseconds)) {
+          temp_s temp;
+          temp.Seconds = 0;
+          temp.Microseconds = 0;
+          temp.Temperature = temperature * 1000;
+          temp.CameraIndex = camera;
+          temp.SensorIndex = ID;
+          temps.push_back(temp);
+        }
+      }
       return temps;
     }
 
@@ -199,6 +261,7 @@ namespace Bsp {
 
     std::vector<pose_s> GetNewPoses(void) {
       std::vector<pose_s> poses;
+      /// @todo
       return poses;
     }
 
@@ -212,11 +275,13 @@ namespace Bsp {
     }
 
     bool SetupCamera(uint16_t Index, uint32_t Trigger) {
+      /// @todo
       return false;
     }
 
     std::map<std::string, std::string> GetStatus(uint16_t Index) {
       std::map<std::string, std::string> status;
+      /// @todo
       return status;
     }
 
