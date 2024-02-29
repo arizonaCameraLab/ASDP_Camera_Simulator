@@ -227,8 +227,6 @@ namespace Bsp {
     return "1.0.0";
   }
 
-  /// @todo Implement below here.
-
   /// Namespace for timing and trigger functions.
   namespace Timing {
 

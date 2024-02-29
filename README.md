@@ -7,23 +7,27 @@ controlled environment.
 
 ## Getting Started
 
+This repository relies on having the ASDP_Core_API repository installed on the
+system at the standard location.  This repository is available from
+https://github.com/arizonaCameraLab/ASDP_Core_API.
+
 This repository has a submodule, which must be initialized after cloning the
 repository.  This can be done as follows:
 
-    git clone https://github.com/arizonaCameraLab/ASDP_Camera__Simulator
+    git clone https://github.com/arizonaCameraLab/ASDP_Camera_Simulator
     git submodule init
 
 or it can be done in one step as follows:
 
-    git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera__Simulator
+    git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera_Simulator
 
 **Build:** ASDP_Camera__Simulator uses CMake to configure the builds (though other build
 systems could be used).  On Ubuntu Linux, this can be done as follows
 
     sudo apt install cmake
-    cd; mkdir src; cd src; git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera__Simulator
+    cd; mkdir src; cd src; git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera_Simulator
     cd; mkdir -p build/ASDP_CoreSimulator; cd build/ASDP_Camera_Simulator
-    cmake ../../src/ASDP_Camera__Simulator
+    cmake ../../src/ASDP_Camera_Simulator
     make
 
 **Install:** The ASDP_Camera_Simulator installs a shared library that is loaded by
@@ -43,3 +47,13 @@ Linux, this can be generated as follows:
 
 **Test:** CMake includes the concept of test applications. You can run the tests
 by running `make test` in the build directory.
+
+## Overview of Operation
+
+The ASDP_Camera_Simulator.cpp file contains the main source code for the
+simulated BSP module.  It makes use of an ImageSource library to generate
+simulated images.  It makes use of the ASDP_Core_Module API to send the UDP
+packets.
+
+*TemperatureSensor* and *Pose* classes implement the temperature and pose
+results based on specified timing periods for each.
