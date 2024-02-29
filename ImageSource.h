@@ -11,7 +11,7 @@
 #include <string>
 #include <memory>
 
-namespace asdp {
+/// @brief Image Source name space
 namespace IS {
 
 /// @brief Class that stores an image and its metadata.
@@ -124,4 +124,3 @@ protected:
 std::string Test();
 
 } // namespace IS
-} // namespace asdp

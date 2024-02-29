@@ -7,7 +7,7 @@
 
 int main(int argc, char** argv)
 {
-  std::string ret = asdp::IS::Test();
+  std::string ret = IS::Test();
   if (ret.size() > 0) {
     std::cerr << "Error: " << ret << std::endl;
     return 1;

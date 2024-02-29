@@ -17,7 +17,7 @@
 #include <netinet/in.h>
 #endif
 
-using namespace asdp::IS;
+using namespace IS;
 
 Image::Image(uint16_t width, uint16_t height, std::shared_ptr< std::vector<uint16_t> > data)
   : m_width(width), m_height(height), m_data(data)
@@ -266,14 +266,14 @@ std::string MovingBarsSource::Test()
   return "";
 }
 
-std::string asdp::IS::Test()
+std::string IS::Test()
 {
   std::string ret;
   ret = Image::Test();
   if (ret != "") {
     return "ImageSource test: Error testing Image: " + ret;
   }
-  ret = asdp::IS::MovingBarsSource::Test();
+  ret = IS::MovingBarsSource::Test();
   if (ret.size() > 0) {
     return "ImageSource test: Error testing MovingBarsSource: " + ret;
   }

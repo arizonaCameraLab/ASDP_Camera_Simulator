@@ -53,6 +53,7 @@ static std::map<std::string, std::map<std::string, std::string>> ParseConfFile(c
 //==============================================================================
 // Helper classes that implement behaviors.
 
+/// @brief Implements the TemperatureSensor behavior
 class TemperatureSensor {
 public:
   TemperatureSensor(uint16_t camera, uint16_t ID, float temperature, float period)
@@ -82,6 +83,7 @@ protected:
   std::chrono::time_point<std::chrono::steady_clock> lastReportTime;
 };
 
+/// @brief Implements the Pose reporter behavior
 class Pose {
 public:
   Pose(uint16_t ID, float period) : ID(ID), period(period) {}
@@ -324,6 +326,22 @@ namespace Bsp {
       std::map<std::string, std::string> status;
       /// @todo
       return status;
+    }
+
+  }
+
+  /// Namespace for UDP inserter functions.
+  namespace UdpInserter {
+
+    bool EnableStream(uint16_t CameraIndex, endpoint_s Endpoint, roi_s Roi, uint32_t SkipFrames,
+      uint32_t StartSeconds, uint32_t StartMicroseconds) {
+      /// @todo
+      return false;
+    }
+
+    bool DisableStream(uint32_t CameraIndex, endpoint_s Endpoint) {
+      /// @todo
+      return false;
     }
 
   }
