@@ -4,7 +4,8 @@ project(ASDP_BSP LANGUAGES CXX)
 #-----------------------------------------------------------------------------
 # Set your favorite C++ standard for compiling the internal files.  The library
 # will export things as extern "C" so this will not impact client programs.
-set(CMAKE_CXX_STANDARD 11)
+# We require C++17 for the use of std::filesystem.
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #-----------------------------------------------------------------------------
@@ -57,6 +58,8 @@ if (BUILD_DOXYGEN)
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM )
 endif (BUILD_DOXYGEN)
+
+add_definitions(-DCONFIG_FILE_PATH="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
 
 #-----------------------------------------------------------------------------
 # Build the helper static libraries.

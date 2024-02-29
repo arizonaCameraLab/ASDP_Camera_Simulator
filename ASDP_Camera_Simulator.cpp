@@ -1,4 +1,141 @@
+#include <fstream>
+#include <map>
+#include <string>
+#include <sstream>
+#include <filesystem>
+#include <vector>
 #include <BspInclude.hpp>
+
+//==============================================================================
+// Helper functions.
+
+
+/// @brief Trim whitespace from the beginning and end of a string.
+/// @param str The string to trim.
+/// @return The trimmed string.
+static std::string TrimWhiteSpace(const std::string& str) {
+  std::string s = str;
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char uc) {return !std::isspace(uc); }));
+  s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char uc) {return !std::isspace(uc); }).base(), s.end());
+  return s;
+}
+
+/// @brief Parse a configuration file.
+/// @param filename The name of the file to parse.
+/// @return A map of maps of strings. The first map is from section name to a map of key-value pairs.
+/// Returns an empty map if the file cannot be opened.
+static std::map<std::string, std::map<std::string, std::string>> ParseConfFile(const std::string& filename) {
+  std::map<std::string, std::map<std::string, std::string>> confMap;
+  std::ifstream file(filename);
+  std::string line;
+  std::string section;
+
+  while (std::getline(file, line)) {
+    if (line[0] == '[') {
+      section = TrimWhiteSpace(line.substr(1, line.find(']') - 1));
+    }
+    else {
+      std::istringstream is_line(line);
+      std::string key;
+      if (std::getline(is_line, key, '=')) {
+        std::string value;
+        if (std::getline(is_line, value)) {
+          confMap[section][TrimWhiteSpace(key)] = TrimWhiteSpace(value);
+        }
+      }
+    }
+  }
+
+  return confMap;
+}
+
+//==============================================================================
+// Start-up code that reads the configuration file and sets up things that are
+// needed for the rest of the code.
+
+/// @brief The path to the configuration file. Defined in the CMakeLists file.
+std::filesystem::path dirPath = CONFIG_FILE_PATH;
+std::filesystem::path baseName = "ASDP_Camera_Simulator.conf";
+/// @brief The configuration file name.
+static const std::string ConfigFileName = (dirPath / baseName).string();
+
+/// @brief Read the configuration map from the configuration file.
+static std::map<std::string, std::map<std::string, std::string> > ConfigMap = ParseConfFile(ConfigFileName);
+
+/// @brief Loads the configuration file and sets up the state.
+class State {
+public:
+  State(const std::map<std::string, std::map<std::string, std::string>>& configMap);
+
+  uint32_t NumInternalTriggers = 0;
+  uint32_t NumExternalTriggers = 0;
+  uint32_t NumTemperatureSensorsPerCamera = 0;
+  uint32_t NumSystemTemperatureSensors = 0;
+  std::vector<Bsp::Pose::pose_report_s> PoseDeviceConfigurations;
+  uint32_t NumCameras = 0;
+};
+
+State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
+{
+  if (configMap.find("Timing") != configMap.end()) {
+    std::map<std::string, std::string> timing = configMap.at("Timing");
+    try {
+      NumInternalTriggers = std::stoi(timing.at("NumInternalTriggers"));
+    }
+    catch (...) {}
+    try {
+      NumExternalTriggers = std::stoi(timing.at("NumExternalTriggers"));
+    }
+    catch (...) {}
+  }
+
+  if (configMap.find("Temperature") != configMap.end()) {
+    std::map<std::string, std::string> temperature = configMap.at("Temperature");
+    try {
+      NumTemperatureSensorsPerCamera = std::stoi(temperature.at("NumSensorsPerCamera"));
+    } catch (...) {};
+    try {
+      NumSystemTemperatureSensors = std::stoi(temperature.at("NumSystemSensors"));
+    }
+    catch (...) {};
+  }
+
+  if (configMap.find("Pose") != configMap.end()) {
+    std::map<std::string, std::string> pose = configMap.at("Pose");
+    uint32_t numPoses = 0;
+    try {
+      numPoses = std::stoi(pose.at("NumPoses"));
+    } catch (...) {}
+    for (uint16_t i = 0; i < numPoses; i++) {
+      Bsp::Pose::pose_report_s report;
+      std::string key = "Pose" + std::to_string(i) + "Orientation";
+      if (pose.find(key) != pose.end()) {
+        report.ReturnsOrientation = (0 != std::stoi(pose.at(key)));
+      }
+      key = "Pose" + std::to_string(i) + "Position";
+      if (pose.find(key) != pose.end()) {
+        report.ReturnsPosition = (0 != std::stoi(pose.at(key)));
+      }
+      PoseDeviceConfigurations.push_back(report);
+    }
+  }
+
+  if (configMap.find("Camera") != configMap.end()) {
+    std::map<std::string, std::string> camera = configMap.at("Camera");
+    NumCameras = 0;
+    try {
+      NumCameras = std::stoi(camera.at("NumCameras"));
+    } catch (...) {}
+  }
+
+  /// @todo Implement below here.
+}
+
+/// @brief The state that is shared between the different functions.
+static State state(ConfigMap);
+
+//==============================================================================
+// Code that implements the Bsp namespace.
 
 /// Overall namespace for the BSP.
 namespace Bsp {
@@ -13,11 +150,11 @@ namespace Bsp {
   namespace Timing {
 
     uint32_t GetNumberOfInternalTriggers(void) {
-      return 0;
+      return state.NumInternalTriggers;
     }
 
     uint32_t GetNumberOfExternalTriggers(void) {
-      return 0;
+      return state.NumExternalTriggers;
     }
 
     void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
@@ -39,11 +176,11 @@ namespace Bsp {
   namespace Temperature {
 
     uint16_t GetNumberOfTemperatureSensorsPerCamera(void) {
-      return 0;
+      return state.NumTemperatureSensorsPerCamera;
     }
 
     uint16_t GetNumberOfSystemTemperatureSensors(void) {
-      return 0;
+      return state.NumSystemTemperatureSensors;
     }
 
     std::vector<temp_s> GetNewTemperatures(void) {
@@ -57,8 +194,7 @@ namespace Bsp {
   namespace Pose {
 
     std::vector<pose_report_s> GetPoseDeviceConfigurations(void) {
-      std::vector<pose_report_s> poseReports;
-      return poseReports;
+      return state.PoseDeviceConfigurations;
     }
 
     std::vector<pose_s> GetNewPoses(void) {
@@ -72,7 +208,7 @@ namespace Bsp {
   namespace Camera {
 
     uint16_t GetNumberOfCameras(void) {
-      return 0;
+      return state.NumCameras;
     }
 
     bool SetupCamera(uint16_t Index, uint32_t Trigger) {
