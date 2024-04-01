@@ -61,6 +61,7 @@ public:
 
   bool ReportTemperature(uint16_t &camera, uint16_t &ID, float& temperature,
                          uint32_t &seconds, uint32_t &microseconds) {
+    /// @todo Implement this by pushing a trigger time into the future so we don't slip each time.
     std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
     std::chrono::duration<float> elapsed = now - lastReportTime;
     if (elapsed.count() < period) {
@@ -89,6 +90,7 @@ public:
   Pose(uint16_t ID, float period) : ID(ID), period(period) {}
 
   bool ReportPose(Bsp::Pose::pose_s& report) {
+    /// @todo Implement this by pushing a trigger time into the future so we don't slip each time.
     std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
     std::chrono::duration<float> elapsed = now - lastReportTime;
     if (elapsed.count() < period) {
@@ -126,12 +128,18 @@ std::filesystem::path baseName = "ASDP_Camera_Simulator.conf";
 static const std::string ConfigFileName = (dirPath / baseName).string();
 
 /// @brief Read the configuration map from the configuration file.
+/// @details This map is used to set up the state of the system and it is configured
+/// when the library is loaded.
 static std::map<std::string, std::map<std::string, std::string> > ConfigMap = ParseConfFile(ConfigFileName);
 
 /// @brief Loads the configuration file and sets up the state.
 class State {
 public:
+  /// @brief Construct a state and start any required threads to operate the system.
   State(const std::map<std::string, std::map<std::string, std::string>>& configMap);
+
+  /// @brief Stop any threads and destruct the state cleanly.
+  ~State();
 
   uint32_t NumInternalTriggers = 0;
   uint32_t NumExternalTriggers = 0;
@@ -139,8 +147,12 @@ public:
   uint32_t NumSystemTemperatureSensors = 0;
   std::vector<Bsp::Pose::pose_report_s> PoseDeviceConfigurations;
   uint32_t NumCameras = 0;
+  float MinCameraPeriodSeconds = 1.0f/60;
+  float MaxCameraPeriodSeconds = 1.0f/50;
   std::vector<TemperatureSensor> TemperatureSensors;
+  float TemperaturePeriod = 0.25;
   std::vector<Pose> Posers;
+  float PosePeriod = 0.25;
 };
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
@@ -166,6 +178,10 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
       NumSystemTemperatureSensors = std::stoi(temperature.at("NumSystemSensors"));
     }
     catch (...) {};
+    try {
+      TemperaturePeriod = std::stof(temperature.at("ReportingPeriodSeconds"));
+    }
+    catch (...) {};
   }
 
   uint32_t numPosers = 0;
@@ -173,6 +189,9 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     std::map<std::string, std::string> pose = configMap.at("Pose");
     try {
       numPosers = std::stoi(pose.at("NumPoses"));
+    } catch (...) {}
+    try {
+      PosePeriod = std::stof(pose.at("ReportingPeriodSeconds"));
     } catch (...) {}
     for (uint16_t i = 0; i < numPosers; i++) {
       Bsp::Pose::pose_report_s report;
@@ -190,31 +209,43 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
 
   if (configMap.find("Camera") != configMap.end()) {
     std::map<std::string, std::string> camera = configMap.at("Camera");
-    NumCameras = 0;
     try {
       NumCameras = std::stoi(camera.at("NumCameras"));
+    } catch (...) {}
+    try {
+      MinCameraPeriodSeconds = std::stof(camera.at("MaxFrameRateSeconds"));
+    } catch (...) {}
+    try {
+      MaxCameraPeriodSeconds = std::stof(camera.at("MinFrameRateSeconds"));
     } catch (...) {}
   }
 
   // Create objects for the temperature sensors.
   for (size_t i = 1; i <= NumTemperatureSensorsPerCamera; i++) {
     for (size_t c = 1; c <= NumCameras; c++) {
-      TemperatureSensors.push_back(TemperatureSensor(c, i, 25.0, 0.25));
+      TemperatureSensors.push_back(TemperatureSensor(c, i, 25.0, TemperaturePeriod));
     }
   }
   for (size_t i = 1; i <= NumSystemTemperatureSensors; i++) {
-    TemperatureSensors.push_back(TemperatureSensor(0, i, 25.0, 0.25));
+    TemperatureSensors.push_back(TemperatureSensor(0, i, 25.0, TemperaturePeriod));
   }
 
   // Create objects for the Posers
   for (size_t i = 1; i <= numPosers; i++) {
-    Posers.push_back(Pose(i, 0.25));
+    Posers.push_back(Pose(i, PosePeriod));
   }
 
   /// @todo Implement below here.
 }
 
+State::~State()
+{
+  /// @todo Implement this.
+}
+
 /// @brief The state that is shared between the different functions.
+/// @details The constructor for this object is called when the library is loaded
+/// and the destructor is called when the library is unloaded.
 static State state(ConfigMap);
 
 //==============================================================================

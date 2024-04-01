@@ -109,6 +109,12 @@ install(TARGETS ASDP_BSP EXPORT ${PROJECT_NAME}
   PUBLIC_HEADER DESTINATION include
 )
 
+# Install the configuration file from the source directory
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_Camera_Simulator.conf
+  DESTINATION bin
+)
+
+
 # Configure the project for use by client projects using CMake
 # This makes the project available as a package for use with find_package()
 # and provides the configuration for the build tree.
