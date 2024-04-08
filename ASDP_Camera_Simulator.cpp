@@ -5,7 +5,17 @@
 #include <filesystem>
 #include <vector>
 #include <chrono>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <memory>
+#include <list>
+//#include <iostream>   ///< @todo Remove when done debugging
 #include <BspInclude.hpp>
+#include <ASDP_Core_API.h>
+#include <ASDP_SpinFreeAccurateTimer.h>
+#include <Trigger.h>
 
 //==============================================================================
 // Helper functions.
@@ -153,6 +163,9 @@ public:
   float TemperaturePeriod = 0.25;
   std::vector<Pose> Posers;
   float PosePeriod = 0.25;
+
+  /// @brief the timer object to avoid spin-waiting inside every thread.
+  asdp::SpinFreeAccurateTimer timer;
 };
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
@@ -280,7 +293,7 @@ namespace Bsp {
       return false;
     }
 
-    bool SoftwareTrigger(uint8_t ID, uint32_t Seconds, uint32_t Microseconds) {
+    bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds) {
       /// @todo
       return false;
     }

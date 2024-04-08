@@ -27,6 +27,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #-----------------------------------------------------------------------------
 # Checking for optional and required packages
 
+find_package(ASDP_Core_API REQUIRED)
 find_package(Doxygen)
 find_package(OpenMP)
 if(OPENMP_FOUND)
@@ -76,6 +77,19 @@ target_include_directories(ImageSource PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+set (Trigger_HEADERS
+  Trigger.h
+)
+set (Trigger_SOURCES
+  Trigger.cpp
+)
+add_library(Trigger STATIC ${Trigger_SOURCES} ${Trigger_HEADERS})
+target_link_libraries(Trigger PUBLIC ImageSource ASDP_Core_API::ASDP_Core_API)
+target_include_directories(Trigger PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
+
 #-----------------------------------------------------------------------------
 # Build the shared library to implement ASDP_BSP, which is in the ASDP_BSP_API submodule directory.
 
@@ -93,7 +107,7 @@ set (ASDP_Camera_Simulator_SOURCES
 )
 
 add_library(ASDP_BSP SHARED ${ASDP_Camera_Simulator_SOURCES} ${ASDP_Camera_Simulator_HEADERS})
-target_link_libraries(ASDP_BSP PRIVATE ImageSource)
+target_link_libraries(ASDP_BSP PRIVATE ImageSource Trigger)
 target_include_directories(ASDP_BSP PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API>
   $<INSTALL_INTERFACE:include>
@@ -149,6 +163,7 @@ if(BUILD_TESTS)
 
   set (CPP_TESTS
     test_ImageSource
+    test_Trigger
   )
   foreach (BASE ${CPP_TESTS})
     set (APP ${BASE})
@@ -157,6 +172,7 @@ if(BUILD_TESTS)
     target_link_libraries(${APP} PRIVATE
       ASDP_BSP
       ImageSource
+      Trigger
     )
     install(TARGETS ${APP} EXPORT ${PROJECT_NAME}
       RUNTIME DESTINATION bin
