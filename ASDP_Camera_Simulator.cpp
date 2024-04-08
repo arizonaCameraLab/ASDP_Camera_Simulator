@@ -130,13 +130,77 @@ protected:
 /// @brief Implements the Camera behavior
 class Camera {
 public:
-  /// @brief The internal trigger each camera is associated with (0 for none).
-  uint8_t trigger = 0;
+
+  /// @brief Construct a camera object.
+  Camera() : cv(std::make_shared<std::condition_variable>()) {}
+
+  /// @brief Destroy a camera object.
+  ~Camera() {}
+
+  /// @brief Set up the camera with a trigger.
+  /// @param trigger The trigger to associate with the camera.
+  /// @return true if the camera was set up successfully, false otherwise.
+  bool Setup(std::shared_ptr<Trigger> trigger) {
+    if (this->trigger) {
+      if (!this->trigger->UnregisterClient(cv)) {
+        return false;
+      }
+    }
+    this->trigger = trigger;
+    trigger->RegisterClient(cv);
+    return true;
+  }
+
+  /// @brief Insert a stream into the camera.
+  /// @param Endpoint The endpoint to send the stream to.
+  /// @param Roi The region of interest to send.
+  /// @param SkipFrames How many frames to skip between sends, 0 for none.
+  /// @param StartSeconds The time to start sending frames, ignore any frames before this.
+  /// @param StartMicroseconds The time to start sending frames, ignore any frames before this.
+  void InsertStream(Bsp::UdpInserter::endpoint_s Endpoint, Bsp::UdpInserter::roi_s Roi, uint32_t SkipFrames,
+        uint32_t StartSeconds, uint32_t StartMicroseconds)
+  {
+    Stream stream;
+    stream.Endpoint = Endpoint;
+    stream.Roi = Roi;
+    stream.SkipFrames = SkipFrames;
+    stream.StartSeconds = StartSeconds;
+    stream.StartMicroseconds = StartMicroseconds;
+    streams.push_back(stream);
+  }
+
+  /// @brief Remove a stream from the camera.
+  /// @param Endpoint The endpoint to remove the stream from.
+  /// @return true if the stream was removed, false otherwise.
+  bool RemoveStream(Bsp::UdpInserter::endpoint_s Endpoint)
+  {
+    for (auto it = streams.begin(); it != streams.end(); it++) {
+      if (it->Endpoint == Endpoint) {
+        streams.erase(it);
+        return true;
+      }
+    }
+    return false;
+  }
+
+protected:
+  /// @brief The internal trigger each camera is associated with (empty for none).
+  std::shared_ptr<Trigger> trigger;
 
   /// @brief A condition variable to signal when the camera is triggered.
   std::shared_ptr<std::condition_variable> cv;
 
-protected:
+  struct Stream {
+    Bsp::UdpInserter::endpoint_s Endpoint;
+    Bsp::UdpInserter::roi_s Roi;
+    uint32_t SkipFrames = 0;                ///< How may frames to skip between sends, 0 for none.
+    uint32_t StartSeconds = 0;              ///< The time to start sending frames. Ignore any frames before this
+    uint32_t StartMicroseconds = 0;         ///< The time to start sending frames. Ignore any frames before this
+    size_t curFrame = 0;  ///< The current frame number, starting with 0, used modulo SkipFrames to determine when to send a frame.
+  };
+
+  /// The streams that are currently enabled for this camera.
+  std::list<Stream> streams;
 };
 
 //==============================================================================
@@ -313,36 +377,36 @@ namespace Bsp {
       return state.NumExternalTriggers;
     }
 
-void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
-  auto now = std::chrono::system_clock::now();
-  Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
-  Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
-}
-
-bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
-  if (ID >= state.triggers.size()) {
-    return false;
-  }
-  state.triggers[ID]->Configure(Mode, Period, TrackingFactor);
-  state.externalTriggers[ID] = ExternalID;
-  return true;
-}
-
-bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds) {
-  bool failed = false;
-
-  // See if any of the internal triggers are tied to this external trigger.  If so, fire them.
-  for (size_t i = 0; i < state.triggers.size(); i++) {
-    if (state.externalTriggers[i] == ExternalID) {
-      if (!state.triggers[i]->Fire(
-        std::chrono::steady_clock::time_point(std::chrono::seconds(Seconds) + std::chrono::microseconds(Microseconds)))) {
-        failed = true;
-      }
+    void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
+      auto now = std::chrono::system_clock::now();
+      Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
+      Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
     }
-  }
 
-  return !failed;
-}
+    bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
+      if (ID >= state.triggers.size()) {
+        return false;
+      }
+      state.triggers[ID]->Configure(Mode, Period, TrackingFactor);
+      state.externalTriggers[ID] = ExternalID;
+      return true;
+    }
+
+    bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds) {
+      bool failed = false;
+
+      // See if any of the internal triggers are tied to this external trigger.  If so, fire them.
+      for (size_t i = 0; i < state.triggers.size(); i++) {
+        if (state.externalTriggers[i] == ExternalID) {
+          if (!state.triggers[i]->Fire(
+            std::chrono::steady_clock::time_point(std::chrono::seconds(Seconds) + std::chrono::microseconds(Microseconds)))) {
+            failed = true;
+          }
+        }
+      }
+
+      return !failed;
+    }
 
   }
 
@@ -409,21 +473,11 @@ bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds
       if (Index >= state.NumCameras) {
         return false;
       }
-
-      // If the camera was previously being triggered, remove its entry.
-      if (state.cameras[Index]->trigger != 0) {
-        if (!state.triggers[state.cameras[Index]->trigger]->UnregisterClient(state.cameras[Index]->cv)) {
-          return false;
-        }
+      if (Trigger >= state.triggers.size()) {
+        return false;
       }
 
-      // Set the trigger for the camera. If it is nonzero, add it to the trigger.
-      state.cameras[Index]->trigger = Trigger;
-      if (Trigger != 0) {
-        state.triggers[Trigger]->RegisterClient(state.cameras[Index]->cv);
-      }
-
-      return true;
+      return state.cameras[Index]->Setup(state.triggers[Trigger]);
     }
 
     std::map<std::string, std::string> GetStatus(uint16_t Index) {
@@ -439,13 +493,18 @@ bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds
 
     bool EnableStream(uint16_t CameraIndex, endpoint_s Endpoint, roi_s Roi, uint32_t SkipFrames,
       uint32_t StartSeconds, uint32_t StartMicroseconds) {
-      /// @todo
-      return false;
+      if (CameraIndex >= state.cameras.size()) {
+        return false;
+      }
+      state.cameras[CameraIndex]->InsertStream(Endpoint, Roi, SkipFrames, StartSeconds, StartMicroseconds);
+      return true;
     }
 
     bool DisableStream(uint32_t CameraIndex, endpoint_s Endpoint) {
-      /// @todo
-      return false;
+      if (CameraIndex >= state.cameras.size()) {
+        return false;
+      }
+      return state.cameras[CameraIndex]->RemoveStream(Endpoint);
     }
 
   }
