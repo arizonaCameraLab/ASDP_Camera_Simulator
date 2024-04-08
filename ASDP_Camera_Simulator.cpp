@@ -16,6 +16,7 @@
 #include <ASDP_Core_API.h>
 #include <ASDP_SpinFreeAccurateTimer.h>
 #include <Trigger.h>
+#include <ImageSource.h>
 
 //==============================================================================
 // Helper functions.
@@ -132,7 +133,15 @@ class Camera {
 public:
 
   /// @brief Construct a camera object.
-  Camera() : cv(std::make_shared<std::condition_variable>()) {}
+  Camera() : cv(std::make_shared<std::condition_variable>()) {
+    // Construct the images that will be sent from the camera.
+    /// @todo Read the number of images from the configuration file.
+    size_t frames = 60;
+    IS::MovingBarsSource source(1280, 1024, frames, 20, 48, 5);
+    for (size_t i = 0; i < frames; i++) {
+      images.push_back(source.getNextImage());
+    }
+  }
 
   /// @brief Destroy a camera object.
   ~Camera() {}
@@ -157,7 +166,8 @@ public:
   /// @param SkipFrames How many frames to skip between sends, 0 for none.
   /// @param StartSeconds The time to start sending frames, ignore any frames before this.
   /// @param StartMicroseconds The time to start sending frames, ignore any frames before this.
-  void InsertStream(Bsp::UdpInserter::endpoint_s Endpoint, Bsp::UdpInserter::roi_s Roi, uint32_t SkipFrames,
+  /// @return true if the stream was inserted, false otherwise.
+  bool InsertStream(Bsp::UdpInserter::endpoint_s Endpoint, Bsp::UdpInserter::roi_s Roi, uint32_t SkipFrames,
         uint32_t StartSeconds, uint32_t StartMicroseconds)
   {
     Stream stream;
@@ -166,7 +176,13 @@ public:
     stream.SkipFrames = SkipFrames;
     stream.StartSeconds = StartSeconds;
     stream.StartMicroseconds = StartMicroseconds;
+    asdp::StreamEndpoint streamEndpoint(Endpoint.IP, Endpoint.Port);
+    stream.sender = std::make_shared<asdp::SenderUDP>(streamEndpoint);
+    if (asdp::OKAY != stream.sender->GetConstructorStatus()) {
+      return false;
+    }
     streams.push_back(stream);
+    return true;
   }
 
   /// @brief Remove a stream from the camera.
@@ -184,6 +200,12 @@ public:
   }
 
 protected:
+
+  /// @brief The images that will be sent from the camera.
+  std::vector< std::shared_ptr<IS::Image> > images;
+  /// @brief The index of the next image to be sent.
+  size_t nextImage = 0;
+
   /// @brief The internal trigger each camera is associated with (empty for none).
   std::shared_ptr<Trigger> trigger;
 
@@ -193,10 +215,11 @@ protected:
   struct Stream {
     Bsp::UdpInserter::endpoint_s Endpoint;
     Bsp::UdpInserter::roi_s Roi;
-    uint32_t SkipFrames = 0;                ///< How may frames to skip between sends, 0 for none.
-    uint32_t StartSeconds = 0;              ///< The time to start sending frames. Ignore any frames before this
-    uint32_t StartMicroseconds = 0;         ///< The time to start sending frames. Ignore any frames before this
+    uint32_t SkipFrames = 0;                  ///< How may frames to skip between sends, 0 for none.
+    uint32_t StartSeconds = 0;                ///< The time to start sending frames. Ignore any frames before this
+    uint32_t StartMicroseconds = 0;           ///< The time to start sending frames. Ignore any frames before this
     size_t curFrame = 0;  ///< The current frame number, starting with 0, used modulo SkipFrames to determine when to send a frame.
+    std::shared_ptr<asdp::SenderUDP> sender;  ///< The sender being used to send the stream.
   };
 
   /// The streams that are currently enabled for this camera.
