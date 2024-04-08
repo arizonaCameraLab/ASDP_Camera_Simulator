@@ -127,6 +127,18 @@ protected:
   std::chrono::time_point<std::chrono::steady_clock> lastReportTime;
 };
 
+/// @brief Implements the Camera behavior
+class Camera {
+public:
+  /// @brief The internal trigger each camera is associated with (0 for none).
+  uint8_t trigger = 0;
+
+  /// @brief A condition variable to signal when the camera is triggered.
+  std::shared_ptr<std::condition_variable> cv;
+
+protected:
+};
+
 //==============================================================================
 // Start-up code that reads the configuration file and sets up things that are
 // needed for the rest of the code.
@@ -166,6 +178,14 @@ public:
 
   /// @brief the timer object to avoid spin-waiting inside every thread.
   asdp::SpinFreeAccurateTimer timer;
+
+  /// @brief The triggers for the system.
+  std::vector< std::shared_ptr<Trigger> > triggers;
+  /// @brief the external trigger each internal trigger is tied to (0 for none).
+  std::vector<uint8_t> externalTriggers;
+
+  /// @brief the cameras in the system
+  std::vector< std::shared_ptr<Camera> > cameras;
 };
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
@@ -248,6 +268,17 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     Posers.push_back(Pose(i, PosePeriod));
   }
 
+  // Create the internal triggers which will by default be disabled and not tied to any external trigger.
+  for (size_t i = 0; i < NumInternalTriggers; i++) {
+    triggers.push_back( std::shared_ptr<Trigger>(new Trigger(timer)));
+    externalTriggers.push_back(0);
+  }
+
+  // Cameras are initially not triggered.
+  for (size_t i = 0; i < NumCameras; i++) {
+    cameras.push_back(std::shared_ptr<Camera>(new Camera));
+  }
+
   /// @todo Implement below here.
 }
 
@@ -282,21 +313,36 @@ namespace Bsp {
       return state.NumExternalTriggers;
     }
 
-    void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
-      auto now = std::chrono::system_clock::now();
-      Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
-      Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
-    }
+void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
+  auto now = std::chrono::system_clock::now();
+  Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
+  Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+}
 
-    bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
-      /// @todo
-      return false;
-    }
+bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
+  if (ID >= state.triggers.size()) {
+    return false;
+  }
+  state.triggers[ID]->Configure(Mode, Period, TrackingFactor);
+  state.externalTriggers[ID] = ExternalID;
+  return true;
+}
 
-    bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds) {
-      /// @todo
-      return false;
+bool SoftwareTrigger(uint8_t ExternalID, uint32_t Seconds, uint32_t Microseconds) {
+  bool failed = false;
+
+  // See if any of the internal triggers are tied to this external trigger.  If so, fire them.
+  for (size_t i = 0; i < state.triggers.size(); i++) {
+    if (state.externalTriggers[i] == ExternalID) {
+      if (!state.triggers[i]->Fire(
+        std::chrono::steady_clock::time_point(std::chrono::seconds(Seconds) + std::chrono::microseconds(Microseconds)))) {
+        failed = true;
+      }
     }
+  }
+
+  return !failed;
+}
 
   }
 
@@ -360,8 +406,24 @@ namespace Bsp {
     }
 
     bool SetupCamera(uint16_t Index, uint32_t Trigger) {
-      /// @todo
-      return false;
+      if (Index >= state.NumCameras) {
+        return false;
+      }
+
+      // If the camera was previously being triggered, remove its entry.
+      if (state.cameras[Index]->trigger != 0) {
+        if (!state.triggers[state.cameras[Index]->trigger]->UnregisterClient(state.cameras[Index]->cv)) {
+          return false;
+        }
+      }
+
+      // Set the trigger for the camera. If it is nonzero, add it to the trigger.
+      state.cameras[Index]->trigger = Trigger;
+      if (Trigger != 0) {
+        state.triggers[Trigger]->RegisterClient(state.cameras[Index]->cv);
+      }
+
+      return true;
     }
 
     std::map<std::string, std::string> GetStatus(uint16_t Index) {
