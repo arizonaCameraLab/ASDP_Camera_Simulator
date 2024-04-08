@@ -136,11 +136,9 @@ public:
   Camera() : cv(std::make_shared<std::condition_variable>()) {
     // Construct the images that will be sent from the camera.
     /// @todo Read the number of images from the configuration file.
+    /// @todo Enable specifying a directory to read the images from as files.
     size_t frames = 60;
-    IS::MovingBarsSource source(1280, 1024, frames, 20, 48, 5);
-    for (size_t i = 0; i < frames; i++) {
-      images.push_back(source.getNextImage());
-    }
+    images = std::make_shared<IS::MovingBarsSource>(1280, 1024, frames, 20, 48, 5);
   }
 
   /// @brief Destroy a camera object.
@@ -201,10 +199,8 @@ public:
 
 protected:
 
-  /// @brief The images that will be sent from the camera.
-  std::vector< std::shared_ptr<IS::Image> > images;
-  /// @brief The index of the next image to be sent.
-  size_t nextImage = 0;
+  /// @brief The images that will be sent from the camera stored in a loopable source.
+  std::shared_ptr<IS::ImageSource> images;
 
   /// @brief The internal trigger each camera is associated with (empty for none).
   std::shared_ptr<Trigger> trigger;
