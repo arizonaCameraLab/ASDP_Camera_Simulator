@@ -6,7 +6,7 @@
 #include <vector>
 #include <iostream>   /// @todo Remove when done debugging
 
-Trigger::Trigger(asdp::SpinFreeAccurateTimer &timer) : m_timer(timer)
+Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer> timer) : m_timer(timer)
 {
   // Create a condition variable for the trigger.
   m_condition = std::make_shared<std::condition_variable>();
@@ -30,7 +30,7 @@ void Trigger::Configure(uint8_t Mode, float Period, float TrackingFactor)
     // We're a periodic trigger, so request a trigger at the specified interval in the future.
     std::chrono::steady_clock::time_point nextTriggerTime = std::chrono::steady_clock::now() +
       std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(m_period));
-    m_timer.AddEntry(nextTriggerTime, m_condition);
+    m_timer->AddEntry(nextTriggerTime, m_condition);
     m_lastRequestedTriggerTime = nextTriggerTime;
   }
 }
@@ -70,7 +70,7 @@ bool Trigger::Fire(std::chrono::steady_clock::time_point time)
 
   if (!(m_mode & 0x01)) {
     // We are a one-shot trigger; we need to request a trigger at the specified time and we're done.
-    m_timer.AddEntry(time, m_condition);
+    m_timer->AddEntry(time, m_condition);
   } else {
     // We're a periodic trigger, so we need to adjust the time to the next trigger based on the tracking factor
     // and the relative phase of the requested time and the ongoing sequence of triggers.
@@ -122,7 +122,7 @@ void Trigger::TriggerThread()
       // We're a periodic trigger, so request a new one.
       std::chrono::steady_clock::time_point nextTriggerTime = m_lastRequestedTriggerTime +
         std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(m_period));
-      m_timer.AddEntry(nextTriggerTime, m_condition);
+      m_timer->AddEntry(nextTriggerTime, m_condition);
 
       // Update the last trigger time
       m_lastRequestedTriggerTime = nextTriggerTime;
@@ -133,7 +133,7 @@ void Trigger::TriggerThread()
 std::string Trigger::Test()
 {
   // Timer to use for our tests.
-  asdp::SpinFreeAccurateTimer timer;
+  std::shared_ptr<asdp::SpinFreeAccurateTimer> timer(new asdp::SpinFreeAccurateTimer());
 
   // Create a Trigger and check client registration and unregistration.
   {

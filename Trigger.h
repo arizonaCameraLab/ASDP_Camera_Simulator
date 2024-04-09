@@ -32,7 +32,7 @@ class Trigger {
 public:
   /// @brief Construct a trigger object.
   /// @param timer The timer object to avoid spin-waiting inside every thread.
-  Trigger(asdp::SpinFreeAccurateTimer& timer);
+  Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer> timer);
 
   /// @brief Destroy a trigger object.
   ~Trigger();
@@ -63,19 +63,23 @@ public:
   /// @return true if the trigger was fired, false otherwise.
   bool Fire(std::chrono::steady_clock::time_point time);
 
+  /// @brief Return the period of the trigger.
+  /// @return The period of the trigger in seconds.
+  float GetPeriod() const { return m_period; }
+
   /// @brief Test the trigger class.
   /// @return An empty string if the test passes, an error message otherwise.
   static std::string Test();
 
 protected:
   // Configuration parameters for the trigger.
-  uint8_t m_mode = 0;
-  float m_period = 0;
-  float m_trackingFactor = 1;
-  std::chrono::steady_clock::time_point m_lastRequestedTriggerTime = {};
+  uint8_t m_mode = 0;                 ///< The mode of the trigger.
+  float m_period = 0;                 ///< The period of the trigger in seconds.
+  float m_trackingFactor = 1;         ///< The tracking factor for the trigger.
+  std::chrono::steady_clock::time_point m_lastRequestedTriggerTime = {}; ///< The last time the trigger was requested.
 
   /// The timer object to avoid spin-waiting inside every thread.
-  asdp::SpinFreeAccurateTimer &m_timer;
+  std::shared_ptr<asdp::SpinFreeAccurateTimer> m_timer;
 
   /// The condition variable to signal when the trigger is fired.
   std::shared_ptr<std::condition_variable> m_condition;
@@ -92,5 +96,7 @@ protected:
   /// Thread to handle the triggering.
   std::thread m_thread;
   std::atomic_bool m_running = false; ///< Used to wait for the thread to start.
+
+  /// Implements the trigger thread.
   void TriggerThread();
 };
