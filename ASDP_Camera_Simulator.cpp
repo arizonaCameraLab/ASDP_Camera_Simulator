@@ -644,13 +644,10 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
   for (size_t i = 0; i < NumCameras; i++) {
     cameras.push_back(std::shared_ptr<Camera>(new Camera(timer)));
   }
-
-  /// @todo Implement below here.
 }
 
 State::~State()
 {
-  /// @todo Implement this.
 }
 
 /// @brief The state that is shared between the different functions.
