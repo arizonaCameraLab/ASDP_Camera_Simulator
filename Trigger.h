@@ -1,3 +1,17 @@
+/*
+ * Copyright (C) 2024: Arizona Board of Regents on Behalf of the University of Arizona
+ */
+ 
+/**
+* @file Trigger.h
+* @brief Apache Strap-Down Pilotage BSP helper class to implement triggers.
+*
+* @author ReliaSolve.
+* @date April 9th, 2024.
+*/
+
+#pragma once
+
 #include <chrono>
 #include <thread>
 #include <mutex>

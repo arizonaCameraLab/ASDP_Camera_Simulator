@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2024: Arizona Board of Regents on Behalf of the University of Arizona
+ */
+
 #include <fstream>
 #include <map>
 #include <string>
@@ -208,6 +212,7 @@ protected:
   /// @brief A condition variable to signal when the camera is triggered.
   std::shared_ptr<std::condition_variable> cv;
 
+  /// @brief Data structure holding information about a stream
   struct Stream {
     Bsp::UdpInserter::endpoint_s Endpoint;
     Bsp::UdpInserter::roi_s Roi;

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2024: Arizona Board of Regents on Behalf of the University of Arizona
+ */
+
 #include <Trigger.h>
 #include <vector>
 #include <iostream>   /// @todo Remove when done debugging

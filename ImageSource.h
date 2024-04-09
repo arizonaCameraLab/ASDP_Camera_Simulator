@@ -2,8 +2,13 @@
  * Copyright (C) 2024: Arizona Board of Regents on Behalf of the University of Arizona
  */
 
-// This file provides the header information for classes that produce sequences
-// of images, artificial cameras.
+ /**
+  * @file ImageSource.h
+  * @brief Provides classes that produce sequences of images, artificial cameras.
+  *
+ * @author ReliaSolve.
+ * @date April 9th, 2024.
+ */
 
 #pragma once
 #include <cstdint>
