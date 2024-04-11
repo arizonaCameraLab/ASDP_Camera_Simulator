@@ -88,7 +88,7 @@ protected:
   std::list< std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > > m_clients;
 
   /// The mutex to protect internal state.
-  std::mutex m_mutex;
+  std::recursive_mutex m_mutex;
 
   /// Variable to tell the thread to stop.
   std::atomic<bool> m_stop = false;

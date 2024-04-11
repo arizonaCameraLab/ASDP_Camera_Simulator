@@ -21,7 +21,7 @@ Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady
 
 void Trigger::Configure(uint8_t Mode, float Period, float TrackingFactor)
 {
-  std::lock_guard<std::mutex> lock(m_mutex);
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
   m_mode = Mode;
   m_period = Period;
   m_trackingFactor = TrackingFactor;
@@ -44,13 +44,13 @@ Trigger::~Trigger()
 
 void Trigger::RegisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue)
 {
-  std::lock_guard<std::mutex> lock(m_mutex);
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
   m_clients.push_back(queue);
 }
 
 bool Trigger::UnregisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue)
 {
-  std::lock_guard<std::mutex> lock(m_mutex);
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
   for (auto client : m_clients) {
     if (client.get() == queue.get()) {
       m_clients.remove(client);
@@ -62,7 +62,7 @@ bool Trigger::UnregisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono:
 
 bool Trigger::Fire(std::chrono::steady_clock::time_point time)
 {
-  std::lock_guard<std::mutex> lock(m_mutex);
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
   // If we are disabled or configured as a hardware trigger, do nothing.
   if ((m_mode & 0x02) == 0) {
@@ -108,7 +108,7 @@ void Trigger::TriggerThread()
     if (m_queue->dequeue(triggerTime, std::chrono::milliseconds(10))) {
       // At this point, we have been triggered.  We need to notify all clients.
       // We're going to look at our internal state, so we need to lock.
-      std::lock_guard<std::mutex> lock(m_mutex);
+      std::lock_guard<std::recursive_mutex> lock(m_mutex);
       for (auto client : m_clients) {
         client->enqueue(triggerTime);
       }
@@ -185,7 +185,7 @@ std::string Trigger::Test()
     trigger.RegisterClient(queue);
     trigger.Configure(4, 0, 0);
     if (trigger.Fire(std::chrono::steady_clock::now())) {
-      return "Fired one-shot harware trigger";
+      return "Fired one-shot hardware trigger";
     }
   }
 
@@ -216,6 +216,23 @@ std::string Trigger::Test()
         return "Failed to receive periodic hardware trigger";
       }
     }
+  }
+
+  // Create a Trigger and configure it as a 60fps periodic trigger.  Then make sure that it fires
+  // for two seconds.
+  {
+    Trigger trigger(timer);
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(queue);
+    trigger.Configure(3, 1.0/60, 1);
+    auto start = std::chrono::steady_clock::now();
+    do {
+      std::chrono::steady_clock::time_point triggerTime;
+      if (!queue->dequeue(triggerTime, std::chrono::milliseconds(50))) {
+        return "Failed to receive periodic software trigger over period of 2 seconds";
+      }
+    } while (std::chrono::steady_clock::now() - start < std::chrono::seconds(2));
   }
 
   // Test the tracking factor and the ability of the system to shift phase based on software triggers.

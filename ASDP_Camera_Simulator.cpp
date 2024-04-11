@@ -264,6 +264,7 @@ Camera::Camera(uint32_t cameraID, uint32_t cameraType, uint32_t sensorWidth, uin
   , m_exposure(exposure)
   , m_gain(gain)
   , m_triggerQ(std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >())
+  , m_sliceQ(std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >())
 {
 }
 
@@ -282,6 +283,8 @@ Camera::~Camera()
   // Clear our streams and slice queue, then reset our trigger and timer.
   m_streams.clear();
   m_sliceQueue.clear();
+  m_sliceQ.reset();
+  m_triggerQ.reset();
   m_trigger.reset();
   m_timer.reset();
 }
@@ -344,7 +347,6 @@ bool Camera::InsertStream(Bsp::UdpInserter::endpoint_s Endpoint, Bsp::UdpInserte
   stream.SkipFrames = SkipFrames;
   stream.StartSeconds = StartSeconds;
   stream.StartMicroseconds = StartMicroseconds;
-  std::cout << "XXX Streaming UDP to " << Endpoint.IP << ":" << Endpoint.Port << std::endl;
   StreamEndpoint streamEndpoint(Endpoint.IP, Endpoint.Port);
   std::shared_ptr<SenderUDP> sender = std::make_shared<SenderUDP>(StreamEndpoint(Endpoint.IP, Endpoint.Port));
   stream.writer = std::make_shared<StreamWriter>(sender);
@@ -377,9 +379,8 @@ void Camera::TriggerThread()
       continue;
     }
 
-    auto now = std::chrono::steady_clock::now();
-    uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
-    uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() / 1000000;
+    uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() % 1000000;
 
     // We have been triggered.  Get the next image and send it to any streams it should
     // go to.
@@ -399,7 +400,6 @@ void Camera::TriggerThread()
       // Get the next image from the source.
       std::shared_ptr<IS::Image> image = m_images->getNextImage();
       if (!image) {
-        std::cerr << "XXX no more images" << std::endl;
         continue;
       }
 
@@ -411,9 +411,6 @@ void Camera::TriggerThread()
       MessageFrameBegin message(*packetBegin, Time(seconds, microseconds),
         m_cameraID, m_cameraType, image->getWidth(), image->getHeight(), m_exposure, m_gain);
       stream.writer->Flush();
-      std::cout << "XXX Sent begin frame" << std::endl;
-
-      continue; /// XXX @todo remove this continue
 
       // Compare each image subset to the ROI and send it if it is in the ROI.
       // The time to send each is evenly divided across the duration of the frame.
@@ -437,7 +434,7 @@ void Camera::TriggerThread()
         if (!((firstLine > stream.Roi.end_y) || (lastLine < stream.Roi.start_y))) {
           Slice slice;
           slice.writer = stream.writer;
-          slice.sendTime = now + std::chrono::seconds(i * sliceTime);
+          slice.sendTime = triggerTime + std::chrono::seconds(i * sliceTime);
           slice.image = image;
           // Trim the region of interest to fit inside the current slice.
           slice.roi = stream.Roi;
@@ -463,7 +460,7 @@ void Camera::TriggerThread()
       {
         Slice slice;
         slice.writer = stream.writer;
-        slice.sendTime = now + std::chrono::seconds(numSlices * sliceTime);
+        slice.sendTime = triggerTime + std::chrono::seconds(numSlices * sliceTime);
         slice.image = image;
         slice.roi = {};
 
