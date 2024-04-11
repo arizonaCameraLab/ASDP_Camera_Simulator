@@ -27,6 +27,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #-----------------------------------------------------------------------------
 # Checking for optional and required packages
 
+find_package(Threads REQUIRED)
 find_package(ASDP_Core_API REQUIRED)
 find_package(Doxygen)
 find_package(OpenMP)
@@ -84,7 +85,7 @@ set (Trigger_SOURCES
   Trigger.cpp
 )
 add_library(Trigger STATIC ${Trigger_SOURCES} ${Trigger_HEADERS})
-target_link_libraries(Trigger PUBLIC ImageSource ASDP_Core_API::ASDP_Core_API)
+target_link_libraries(Trigger PUBLIC ImageSource ASDP_Core_API::ASDP_Core_API Threads::Threads)
 target_include_directories(Trigger PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
@@ -170,7 +171,7 @@ if(BUILD_TESTS)
     add_executable (${APP} tests_cpp/${BASE}.cpp)
     set_target_properties(${APP} PROPERTIES FOLDER tests/C++)
     target_link_libraries(${APP} PRIVATE
-      ASDP_BSP
+      #ASDP_BSP
       ImageSource
       Trigger
     )

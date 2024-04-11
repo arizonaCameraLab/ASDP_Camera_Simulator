@@ -15,12 +15,12 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
-#include <condition_variable>
 #include <atomic>
 #include <memory>
 #include <list>
 #include <string>
-#include <ASDP_SpinFreeAccurateTimer.h>
+#include <ASDP_SpinFreeQueue.hpp>
+#include <ASDP_SpinFreeAccurateTimer.hpp>
 
 /// @brief Implements Trigger behavior.
 /// @details This class handles the firing of triggers.  It will be used to implement both
@@ -32,7 +32,7 @@ class Trigger {
 public:
   /// @brief Construct a trigger object.
   /// @param timer The timer object to avoid spin-waiting inside every thread.
-  Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer> timer);
+  Trigger(std::shared_ptr< asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer);
 
   /// @brief Destroy a trigger object.
   ~Trigger();
@@ -45,13 +45,13 @@ public:
   void Configure(uint8_t Mode, float Period, float TrackingFactor);
 
   /// @brief Register a client that will be notified when the trigger fires.
-  /// @param cv The condition variable to register.
-  void RegisterClient(std::shared_ptr<std::condition_variable> cv);
+  /// @param queue The queue to register.
+  void RegisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue);
 
   /// @brief Unregister a client that will be notified when the trigger fires.
-  /// @param cv The condition variable to unregister.
+  /// @param queue The queue to unregister.
   /// @return true if the client was found and unregistered, false otherwise.
-  bool UnregisterClient(std::shared_ptr<std::condition_variable> cv);
+  bool UnregisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue);
 
   /// @brief Fire the trigger, presumably based on a software trigger request.
   /// @details This function is called when a trigger should be fired.  For periodic
@@ -79,15 +79,15 @@ protected:
   std::chrono::steady_clock::time_point m_lastRequestedTriggerTime = {}; ///< The last time the trigger was requested.
 
   /// The timer object to avoid spin-waiting inside every thread.
-  std::shared_ptr<asdp::SpinFreeAccurateTimer> m_timer;
+  std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > m_timer;
 
-  /// The condition variable to signal when the trigger is fired.
-  std::shared_ptr<std::condition_variable> m_condition;
+  /// The queue to use when the trigger is fired.
+  std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > m_queue;
 
-  /// Clients who are registered with us.  Each is a condition variable to be signaled.
-  std::list< std::shared_ptr<std::condition_variable> > m_clients;
+  /// Clients who are registered with us.  Each has a queue to be signaled.
+  std::list< std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > > m_clients;
 
-  /// The mutex to protect the condition variable and other internal state.
+  /// The mutex to protect internal state.
   std::mutex m_mutex;
 
   /// Variable to tell the thread to stop.

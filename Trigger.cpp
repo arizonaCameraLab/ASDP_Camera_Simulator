@@ -6,15 +6,16 @@
 #include <vector>
 #include <iostream>   /// @todo Remove when done debugging
 
-Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer> timer) : m_timer(timer)
+Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer)
+  : m_timer(timer)
 {
   // Create a condition variable for the trigger.
-  m_condition = std::make_shared<std::condition_variable>();
+  m_queue = std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
 
   // Start our thread to handle the triggering.
   m_thread = std::thread(&Trigger::TriggerThread, this);
   while (!m_running) {
-    std::this_thread::yield();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 }
 
@@ -30,7 +31,7 @@ void Trigger::Configure(uint8_t Mode, float Period, float TrackingFactor)
     // We're a periodic trigger, so request a trigger at the specified interval in the future.
     std::chrono::steady_clock::time_point nextTriggerTime = std::chrono::steady_clock::now() +
       std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(m_period));
-    m_timer->AddEntry(nextTriggerTime, m_condition);
+    m_timer->AddEntry(nextTriggerTime, nextTriggerTime, m_queue);
     m_lastRequestedTriggerTime = nextTriggerTime;
   }
 }
@@ -41,17 +42,17 @@ Trigger::~Trigger()
   m_thread.join();
 }
 
-void Trigger::RegisterClient(std::shared_ptr<std::condition_variable> cv)
+void Trigger::RegisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
-  m_clients.push_back(cv);
+  m_clients.push_back(queue);
 }
 
-bool Trigger::UnregisterClient(std::shared_ptr<std::condition_variable> cv)
+bool Trigger::UnregisterClient(std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   for (auto client : m_clients) {
-    if (client.get() == cv.get()) {
+    if (client.get() == queue.get()) {
       m_clients.remove(client);
       return true;
     }
@@ -70,7 +71,7 @@ bool Trigger::Fire(std::chrono::steady_clock::time_point time)
 
   if (!(m_mode & 0x01)) {
     // We are a one-shot trigger; we need to request a trigger at the specified time and we're done.
-    m_timer->AddEntry(time, m_condition);
+    m_timer->AddEntry(time, time, m_queue);
   } else {
     // We're a periodic trigger, so we need to adjust the time to the next trigger based on the tracking factor
     // and the relative phase of the requested time and the ongoing sequence of triggers.
@@ -99,33 +100,29 @@ bool Trigger::Fire(std::chrono::steady_clock::time_point time)
 void Trigger::TriggerThread()
 {
   m_running = true;
-  while (!m_stop && m_condition) {
+  while (!m_stop && m_queue) {
     // See if we have been triggered. Timeout so that we can shut down even
     // if we are not triggered.
-    {
-      std::unique_lock<std::mutex> cvLock(m_mutex);
-      auto status = m_condition->wait_for(cvLock, std::chrono::milliseconds(10));
-      if (status == std::cv_status::timeout) {
-        continue;
+    std::chrono::steady_clock::time_point triggerTime;
+    // Handle only one trigger so that we always check for being done.
+    if (m_queue->dequeue(triggerTime, std::chrono::milliseconds(10))) {
+      // At this point, we have been triggered.  We need to notify all clients.
+      // We're going to look at our internal state, so we need to lock.
+      std::lock_guard<std::mutex> lock(m_mutex);
+      for (auto client : m_clients) {
+        client->enqueue(triggerTime);
       }
-    }
 
-    // At this point, we have been triggered.  We need to notify all clients.
-    // We're going to look at our internal state, so we need to lock.
-    std::lock_guard<std::mutex> lock(m_mutex);
-    for (auto client : m_clients) {
-      client->notify_all();
-    }
+      // See if we need to request a new trigger depending on the mode.
+      if (m_mode & 0x01) {
+        // We're a periodic trigger, so request a new one.
+        std::chrono::steady_clock::time_point nextTriggerTime = m_lastRequestedTriggerTime +
+          std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(m_period));
+        m_timer->AddEntry(nextTriggerTime, nextTriggerTime, m_queue);
 
-    // See if we need to request a new trigger depending on the mode.
-    if (m_mode & 0x01) {
-      // We're a periodic trigger, so request a new one.
-      std::chrono::steady_clock::time_point nextTriggerTime = m_lastRequestedTriggerTime +
-        std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(m_period));
-      m_timer->AddEntry(nextTriggerTime, m_condition);
-
-      // Update the last trigger time
-      m_lastRequestedTriggerTime = nextTriggerTime;
+        // Update the last trigger time
+        m_lastRequestedTriggerTime = nextTriggerTime;
+      }
     }
   }
 }
@@ -133,22 +130,25 @@ void Trigger::TriggerThread()
 std::string Trigger::Test()
 {
   // Timer to use for our tests.
-  std::shared_ptr<asdp::SpinFreeAccurateTimer> timer(new asdp::SpinFreeAccurateTimer());
+  std::shared_ptr< asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer(
+    new asdp::SpinFreeAccurateTimer< std::chrono::steady_clock::time_point>());
 
   // Create a Trigger and check client registration and unregistration.
   {
     Trigger trigger(timer);
-    std::shared_ptr<std::condition_variable> cv1 = std::make_shared<std::condition_variable>();
-    std::shared_ptr<std::condition_variable> cv2 = std::make_shared<std::condition_variable>();
-    trigger.RegisterClient(cv1);
-    trigger.RegisterClient(cv2);
-    if (trigger.UnregisterClient(cv1) == false) {
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > q1 =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > q2 =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(q1);
+    trigger.RegisterClient(q2);
+    if (trigger.UnregisterClient(q1) == false) {
       return "Failed to unregister client 1";
     }
-    if (trigger.UnregisterClient(cv1) == true) {
+    if (trigger.UnregisterClient(q1) == true) {
       return "Unregistered client 1 twice";
     }
-    if (trigger.UnregisterClient(cv2) == false) {
+    if (trigger.UnregisterClient(q2) == false) {
       return "Failed to unregister client 2";
     }
   }
@@ -166,21 +166,23 @@ std::string Trigger::Test()
   // Then configure as a hardware trigger and ensure that firing does not work.
   {
     Trigger trigger(timer);
-    std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
-    trigger.RegisterClient(cv);
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(queue);
     trigger.Configure(2, 0, 0);
     if (!trigger.Fire(std::chrono::steady_clock::now())) {
       return "Failed to fire one-shot software trigger";
     }
-    std::unique_lock<std::mutex> lock(trigger.m_mutex);
-    if (cv->wait_for(lock, std::chrono::milliseconds(500)) == std::cv_status::timeout) {
+    std::chrono::steady_clock::time_point triggerTime;
+    if (!queue->dequeue(triggerTime, std::chrono::milliseconds(500))) {
       return "Failed to receive one-shot software trigger";
     }
   }
   {
     Trigger trigger(timer);
-    std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
-    trigger.RegisterClient(cv);
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(queue);
     trigger.Configure(4, 0, 0);
     if (trigger.Fire(std::chrono::steady_clock::now())) {
       return "Fired one-shot harware trigger";
@@ -191,24 +193,26 @@ std::string Trigger::Test()
   // times.
   {
     Trigger trigger(timer);
-    std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
-    trigger.RegisterClient(cv);
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(queue);
     trigger.Configure(3, 1e-3, 1);
     for (int i = 0; i < 10; i++) {
-      std::unique_lock<std::mutex> lock(trigger.m_mutex);
-      if (cv->wait_for(lock, std::chrono::milliseconds(500)) == std::cv_status::timeout) {
+      std::chrono::steady_clock::time_point triggerTime;
+      if (!queue->dequeue(triggerTime, std::chrono::milliseconds(500))) {
         return "Failed to receive periodic software trigger";
       }
     }
   }
   {
     Trigger trigger(timer);
-    std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
-    trigger.RegisterClient(cv);
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(queue);
     trigger.Configure(5, 1e-3, 1);
     for (int i = 0; i < 10; i++) {
-      std::unique_lock<std::mutex> lock(trigger.m_mutex);
-      if (cv->wait_for(lock, std::chrono::milliseconds(500)) == std::cv_status::timeout) {
+      std::chrono::steady_clock::time_point triggerTime;
+      if (!queue->dequeue(triggerTime, std::chrono::milliseconds(500))) {
         return "Failed to receive periodic hardware trigger";
       }
     }
@@ -222,16 +226,17 @@ std::string Trigger::Test()
   {
     // Configure the trigger with a period of 10ms and a tracking factor of 0.5.
     Trigger trigger(timer);
-    std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
-    trigger.RegisterClient(cv);
+    std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > queue =
+      std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >();
+    trigger.RegisterClient(queue);
     float period = 10e-3;
     trigger.Configure(3, period, 0.5);
 
     // Find the average offset from 0 time in period units.
     double offsetFrac = 0;
     for (int i = 0; i < 10; i++) {
-      std::unique_lock<std::mutex> lock(trigger.m_mutex);
-      if (cv->wait_for(lock, std::chrono::milliseconds(500)) == std::cv_status::timeout) {
+      std::chrono::steady_clock::time_point triggerTime;
+      if (!queue->dequeue(triggerTime, std::chrono::milliseconds(500))) {
         return "Failed to receive periodic software trigger";
       }
       std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
@@ -248,8 +253,8 @@ std::string Trigger::Test()
     // Do this relative to the offset from a particular trigger and send the same time for multiple
     // iterations to see how the offset changes.
     {
-      std::unique_lock<std::mutex> lock(trigger.m_mutex);
-      if (cv->wait_for(lock, std::chrono::milliseconds(500)) == std::cv_status::timeout) {
+      std::chrono::steady_clock::time_point triggerTime;
+      if (!queue->dequeue(triggerTime, std::chrono::milliseconds(500))) {
         return "Failed to receive periodic software trigger";
       }
     }
@@ -266,8 +271,8 @@ std::string Trigger::Test()
       // Track how the offset changes
       double of = 0;
       for (int i = 0; i < 10; i++) {
-        std::unique_lock<std::mutex> lock(trigger.m_mutex);
-        if (cv->wait_for(lock, std::chrono::milliseconds(500)) == std::cv_status::timeout) {
+        std::chrono::steady_clock::time_point triggerTime;
+        if (!queue->dequeue(triggerTime, std::chrono::milliseconds(500))) {
           return "Failed to receive periodic software trigger";
         }
         std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
