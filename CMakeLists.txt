@@ -124,11 +124,17 @@ install(TARGETS ASDP_BSP EXPORT ${PROJECT_NAME}
   PUBLIC_HEADER DESTINATION include
 )
 
-# Install the configuration file from the source directory
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ASDP_Camera_Simulator.conf
+# Install the configuration file from the source directory into the bin directory
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/ASDP_Camera_Simulator.conf"
   DESTINATION bin
 )
 
+# Also install the DLL and configuration file into the ASDP_Core_Module directory
+# alongside our binary installation.  This is a bit of a hack, but it will let us
+# provide the DLL to the ASDP_Core_Module project without having to copy it manually.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/ASDP_Camera_Simulator.conf" "$<TARGET_FILE:ASDP_BSP>"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/../../ASDP_Core_Module/bin"
+)
 
 # Configure the project for use by client projects using CMake
 # This makes the project available as a package for use with find_package()
