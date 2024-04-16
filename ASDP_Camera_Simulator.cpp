@@ -698,6 +698,10 @@ namespace Bsp {
     return "1.0.0";
   }
 
+  uint32_t GetSerialNumber(void) {
+    return 0;
+  }
+
   /// Namespace for timing and trigger functions.
   namespace Timing {
 
