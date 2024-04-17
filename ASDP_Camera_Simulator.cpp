@@ -843,8 +843,8 @@ namespace Bsp {
       status["type"] = "0";
       status["width"] = "1280";
       status["height"] = "1024";
-      status["minTriggerPeriod"] = "0.0166667";
-      status["maxTriggerPeriod"] = "0.02";
+      status["minTriggerPeriod"] = "0.0166666";
+      status["maxTriggerPeriod"] = "0.0200001";
 
       return status;
     }
