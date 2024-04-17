@@ -838,9 +838,14 @@ namespace Bsp {
         return status;
       }
 
+      // Fill in camera inforamtion.
       // The arrays are 0-indexed whereas our numbers are 1-indexed.
+      status["type"] = "0";
+      status["width"] = "1280";
+      status["height"] = "1024";
+      status["minTriggerPeriod"] = "0.0166667";
+      status["maxTriggerPeriod"] = "0.02";
 
-      /// @todo
       return status;
     }
 
