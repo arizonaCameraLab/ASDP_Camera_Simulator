@@ -142,7 +142,7 @@ public:
   /// @brief Construct a camera object.
   /// @param id The ID of the camera.
   Camera(
-    uint32_t cameraID = 0, uint32_t cameraType = 2, uint32_t sensorWidth = 1280, uint32_t sensorHeight = 1024,
+    uint32_t cameraID = 0, uint32_t cameraType = 0, uint32_t sensorWidth = 1280, uint32_t sensorHeight = 1024,
     float exposure = 0.001f,  float gain = 1.0f);
 
   /// @brief Destroy a camera object.
@@ -169,6 +169,13 @@ public:
   /// @param Endpoint The endpoint to remove the stream from.
   /// @return true if the stream was removed, false otherwise.
   bool RemoveStream(Bsp::UdpInserter::endpoint_s Endpoint);
+
+  uint32_t GetCameraID() const { return m_cameraID; }
+  uint32_t GetCameraType() const { return m_cameraType; }
+  uint32_t GetSensorWidth() const { return m_sensorWidth; }
+  uint32_t GetSensorHeight() const { return m_sensorHeight; }
+  float GetExposure() const { return m_exposure; }
+  float GetGain() const { return m_gain; }
 
 protected:
 
@@ -250,7 +257,7 @@ protected:
 
   /// Queue to push on when a slice is triggered.
   /// After an entry has been added to the m_sliceQueue, an entry is added to this queue.
-  /// When the slice thread receives an entry on teh m_sliceQ, it reads the m_sliceQueue
+  /// When the slice thread receives an entry on the m_sliceQ, it reads the m_sliceQueue
   /// to find the corresponding entry.  There are always the same number of entries pushed
   /// onto each queue.
   std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > m_sliceQ;
@@ -333,6 +340,19 @@ bool Camera::Setup(std::shared_ptr< SpinFreeAccurateTimer<std::chrono::steady_cl
     }
   }
 
+  // Clear the trigger and slice queues so they will be ready when re-started.
+  std::chrono::steady_clock::time_point timePt;
+  while (m_triggerQ->size()) {
+    m_triggerQ->dequeue(timePt, std::chrono::milliseconds(10));
+  }
+  while (m_sliceQ->size()) {
+    m_sliceQ->dequeue(timePt, std::chrono::milliseconds(10));
+  }
+  while (m_sliceQueue.size()) {
+    Slice slice;
+    m_sliceQueue.dequeue(slice, std::chrono::milliseconds(10));
+  }
+
   // Register us with the trigger.
   m_trigger = trigger;
   if (trigger) {
@@ -408,7 +428,8 @@ void Camera::TriggerThread()
         continue;
       }
 
-      /// Wait until the queue is empty to prevent us from writing overlapping frames
+      /// Wait until the slice queues are empty to prevent us from writing overlapping frames
+      m_sliceQ->awaitEmpty(0, std::chrono::milliseconds(1000));
       m_sliceQueue.awaitEmpty(0, std::chrono::milliseconds(1000));
 
       // Send a begin-frame message to the stream.
@@ -655,8 +676,8 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
   }
 
   // Cameras are initially not triggered.
-  for (size_t i = 0; i < NumCameras; i++) {
-    cameras.push_back(std::make_shared<Camera>());
+  for (uint32_t i = 0; i < NumCameras; i++) {
+    cameras.push_back(std::make_shared<Camera>(i+1));
   }
 }
 
@@ -840,9 +861,9 @@ namespace Bsp {
 
       // Fill in camera inforamtion.
       // The arrays are 0-indexed whereas our numbers are 1-indexed.
-      status["type"] = "0";
-      status["width"] = "1280";
-      status["height"] = "1024";
+      status["type"] = std::to_string(state.cameras[Index - 1]->GetCameraType());
+      status["width"] = std::to_string(state.cameras[Index - 1]->GetSensorWidth());
+      status["height"] = std::to_string(state.cameras[Index - 1]->GetSensorHeight());
       status["minTriggerPeriod"] = "0.0166666";
       status["maxTriggerPeriod"] = "0.0200001";
 
