@@ -22,13 +22,19 @@ Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady
 void Trigger::Configure(uint8_t Mode, float Period, float TrackingFactor)
 {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  uint8_t oldMode = m_mode;
   m_mode = Mode;
   m_period = Period;
   m_trackingFactor = TrackingFactor;
 
   // See if we need to request a trigger depending on the mode.
-  if (m_mode & 0x01) {
-    // We're a periodic trigger, so request a trigger at the specified interval in the future.
+  /// @todo In the case where the trigger had a very long period and we're setting it to a short
+  /// period, this may take an entire old period to come into effect.  So we need to replace the
+  /// old entry if there is one.  Unfortunately, the timer may be handling multiple triggers, so
+  /// we can't be sure to get the correct entry.
+  if ((m_mode & 0x01) && !(oldMode & 0x01)) {
+    // We're a periodic trigger, so request a trigger at the specified interval in the future unless
+    // we were already periodic.
     std::chrono::steady_clock::time_point nextTriggerTime = std::chrono::steady_clock::now() +
       std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(m_period));
     m_timer->AddEntry(nextTriggerTime, nextTriggerTime, m_queue);
