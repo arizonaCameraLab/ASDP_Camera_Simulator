@@ -181,6 +181,7 @@ MovingBarsSource::MovingBarsSource(uint16_t width, uint16_t height, size_t numIm
   , m_currentIndex(0)
 {
   // Create each image in the sequence, filling in the moving bars for each one.
+  size_t barSpacing = width / numBars;
   for (size_t i = 0; i < numImages; i++) {
     std::shared_ptr< std::vector<uint16_t> > data(new std::vector<uint16_t>(width * height));
 #pragma omp parallel for
@@ -188,7 +189,7 @@ MovingBarsSource::MovingBarsSource(uint16_t width, uint16_t height, size_t numIm
       for (int x = 0; x < width; x++) {
         uint16_t value = darkValue;
         for (uint16_t bar = 0; bar < numBars; bar++) {
-          if ((x + i * speed) % width >= bar * barWidth && (x + i * speed) % width < (bar + 1) * barWidth) {
+          if ((x + i * speed) % barSpacing <= barWidth)  {
             value = brightValue;
           }
         }
