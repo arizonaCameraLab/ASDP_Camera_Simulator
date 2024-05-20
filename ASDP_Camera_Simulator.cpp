@@ -143,7 +143,7 @@ public:
   /// @param id The ID of the camera.
   Camera(
     uint32_t cameraID = 0, uint32_t cameraType = 0, uint32_t sensorWidth = 1280, uint32_t sensorHeight = 1024,
-    float exposure = 0.001f,  float gain = 1.0f);
+    float exposure = 0.001f,  float gain = 1.0f, float minPeriodSeconds = 1/60.0f, float maxPeriodSeconds = 1/50.0f);
 
   /// @brief Destroy a camera object.
   ~Camera();
@@ -176,17 +176,21 @@ public:
   uint32_t GetSensorHeight() const { return m_sensorHeight; }
   float GetExposure() const { return m_exposure; }
   float GetGain() const { return m_gain; }
+  float GetMinPeriodSeconds() const { return m_minPeriodSeconds; }
+  float GetMaxPeriodSeconds() const { return m_maxPeriodSeconds; }
 
 protected:
 
   //========================
   // Camera configuration.
-  uint32_t m_cameraID = 0;
-  uint32_t m_cameraType = 2;
-  uint32_t m_sensorWidth = 1280;
-  uint32_t m_sensorHeight = 1024;
-  float m_exposure = 0.001f;
-  float m_gain = 1.0f;
+  uint32_t m_cameraID;
+  uint32_t m_cameraType;
+  uint32_t m_sensorWidth;
+  uint32_t m_sensorHeight;
+  float m_exposure;
+  float m_gain;
+  float m_minPeriodSeconds;
+  float m_maxPeriodSeconds;
 
   /// @brief The images that will be sent from the camera stored in a loopable source.
   std::shared_ptr<IS::ImageSource> m_images;
@@ -264,13 +268,15 @@ protected:
 };
 
 Camera::Camera(uint32_t cameraID, uint32_t cameraType, uint32_t sensorWidth, uint32_t sensorHeight,
-  float exposure, float gain)
+  float exposure, float gain, float minPeriodSeconds, float maxPeriodSeconds)
   : m_cameraID(cameraID)
   , m_cameraType(cameraType)
   , m_sensorWidth(sensorWidth)
   , m_sensorHeight(sensorHeight)
   , m_exposure(exposure)
   , m_gain(gain)
+  , m_minPeriodSeconds(minPeriodSeconds)
+  , m_maxPeriodSeconds(maxPeriodSeconds)
   , m_triggerQ(std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >())
   , m_sliceQ(std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >())
 {
@@ -451,8 +457,8 @@ void Camera::TriggerThread()
       // it doesn't miss slices even if it misses a condition variable trigger.
       uint32_t cols = image->getWidth();
       uint32_t rows = image->getHeight();
-      uint32_t numSlices = rows / 3;      ///< At most 3 rows per slice.
-      uint32_t sliceTime = m_trigger->GetPeriod() / (numSlices + 1);  ///< Period gap to send each slice in seconds to be done before next
+      uint32_t numSlices = (rows+2) / 3;      ///< At most 3 rows per slice, but be sure to capture any partial write.
+      uint32_t sliceTimeMicroseconds = 1e6f * m_trigger->GetPeriod() / (numSlices + 1);  ///< Period gap to send each slice in seconds to be done before next
       for (uint32_t i = 0; i < numSlices; i++) {
         uint32_t firstLine = i * 3;
         uint32_t lastLine = (i + 1) * 3 - 1;
@@ -462,7 +468,7 @@ void Camera::TriggerThread()
         if (!((firstLine > stream.Roi.end_y) || (lastLine < stream.Roi.start_y))) {
           Slice slice;
           slice.writer = stream.writer;
-          slice.sendTime = triggerTime + std::chrono::seconds(i * sliceTime);
+          slice.sendTime = triggerTime + std::chrono::microseconds(i * sliceTimeMicroseconds);
           slice.image = image;
           // Trim the region of interest to fit inside the current slice.
           slice.roi = stream.Roi;
@@ -486,7 +492,7 @@ void Camera::TriggerThread()
       {
         Slice slice;
         slice.writer = stream.writer;
-        slice.sendTime = triggerTime + std::chrono::seconds(numSlices * sliceTime);
+        slice.sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
         slice.image = image;
         slice.roi = {};
 
@@ -653,10 +659,10 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
       NumCameras = std::stoi(camera.at("NumCameras"));
     } catch (...) {}
     try {
-      MinCameraPeriodSeconds = std::stof(camera.at("MaxFrameRateSeconds"));
+      MinCameraPeriodSeconds = std::stof(camera.at("MinFramePeriodSeconds"));
     } catch (...) {}
     try {
-      MaxCameraPeriodSeconds = std::stof(camera.at("MinFrameRateSeconds"));
+      MaxCameraPeriodSeconds = std::stof(camera.at("MaxFramePeriodSeconds"));
     } catch (...) {}
   }
 
@@ -677,7 +683,8 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
 
   // Cameras are initially not triggered.
   for (uint32_t i = 0; i < NumCameras; i++) {
-    cameras.push_back(std::make_shared<Camera>(i+1));
+    cameras.push_back(std::make_shared<Camera>(i+1, 0, 1280, 1024, 0.001f, 1.0f,
+      MinCameraPeriodSeconds, MaxCameraPeriodSeconds));
   }
 }
 
@@ -864,8 +871,8 @@ namespace Bsp {
       status["type"] = std::to_string(state.cameras[Index - 1]->GetCameraType());
       status["width"] = std::to_string(state.cameras[Index - 1]->GetSensorWidth());
       status["height"] = std::to_string(state.cameras[Index - 1]->GetSensorHeight());
-      status["minTriggerPeriod"] = "0.0166666";
-      status["maxTriggerPeriod"] = "0.0200001";
+      status["minTriggerPeriod"] = std::to_string(state.cameras[Index - 1]->GetMinPeriodSeconds());
+      status["maxTriggerPeriod"] = std::to_string(state.cameras[Index - 1]->GetMaxPeriodSeconds());
 
       return status;
     }
