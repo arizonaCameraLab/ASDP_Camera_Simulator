@@ -237,6 +237,7 @@ std::string MovingBarsSource::Test()
     uint16_t darkValue = 100;
     uint16_t brightValue = 50000;
     MovingBarsSource source(width, height, numImages, numBars, barWidth, speed, darkValue, brightValue);
+    size_t barSpacing = width / numBars;
 
     // Get the images and check them.
     for (size_t i = 0; i < numImages; i++) {
@@ -251,12 +252,12 @@ std::string MovingBarsSource::Test()
         for (uint16_t x = 0; x < width; x++) {
           uint16_t value = darkValue;
           for (uint16_t bar = 0; bar < numBars; bar++) {
-            if ((x + i * speed) % width >= bar * barWidth && (x + i * speed) % width < (bar + 1) * barWidth) {
+            if ((x + i * speed) % barSpacing <= barWidth) {
               value = brightValue;
             }
           }
           if (image->getData()->at(y * width + x) != value) {
-            return "Mismatched pixel value";
+            return "Mismatched pixel value at pixel " + std::to_string(x) + "," + std::to_string(y);
           }
         }
       }
