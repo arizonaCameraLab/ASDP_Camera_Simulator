@@ -316,8 +316,8 @@ bool Camera::Setup(std::shared_ptr< SpinFreeAccurateTimer<std::chrono::steady_cl
     // Windows, the threads do not start then.
     /// @todo Read the number of images from the configuration file.
     /// @todo Enable specifying a directory to read the images from as files.
-    size_t frames = 60;
-    m_images = std::make_shared<IS::MovingBarsSource>(1280, 1024, frames, 20, 48, 5);
+    size_t frames = 64;
+    m_images = std::make_shared<IS::MovingBarsSource>(1280, 1024, frames, 20, 48, 2);
 
     // If we're already associated with a trigger, unregister us from it.
     if (m_trigger) {
