@@ -800,8 +800,8 @@ namespace Bsp {
         uint32_t seconds, microseconds;
         if (sensor.ReportTemperature(camera, ID, temperature, seconds, microseconds)) {
           temp_s temp;
-          temp.Seconds = 0;
-          temp.Microseconds = 0;
+          temp.Seconds = seconds;
+          temp.Microseconds = microseconds;
           temp.Temperature = temperature * 1000;
           temp.CameraIndex = camera;
           temp.SensorIndex = ID;
