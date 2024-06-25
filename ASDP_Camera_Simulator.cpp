@@ -455,6 +455,7 @@ void Camera::TriggerThread()
       // The sending thread will send them when triggered.
       // Store the time to send each slice inside the slice object so that the sending thread can use it to ensure that
       // it doesn't miss slices even if it misses a condition variable trigger.
+      /// @todo When simulating a 3kx3k camera, every line will be its own slice.
       uint32_t cols = image->getWidth();
       uint32_t rows = image->getHeight();
       uint32_t numSlices = (rows+2) / 3;      ///< At most 3 rows per slice, but be sure to capture any partial write.
