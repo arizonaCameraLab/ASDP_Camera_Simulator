@@ -17,8 +17,11 @@ or it can be done in one step as follows:
 
     git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera_Simulator
 
+This repository also depends on the ASDP_Core_API repository to have been installed
+on this machine.  See that repository for more information.
+
 **Build:** ASDP_Camera__Simulator uses CMake to configure the builds (though other build
-systems could be used).  On Ubuntu Linux, this can be done as follows
+systems could be used).  On Ubuntu Linux, this can be done as follows:
 
     sudo apt install cmake
     cd; mkdir src; cd src; git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera_Simulator
