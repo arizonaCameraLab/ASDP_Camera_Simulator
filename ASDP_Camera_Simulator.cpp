@@ -15,6 +15,7 @@
 #include <memory>
 #include <list>
 #include <deque>
+#include <algorithm>
 #include <iostream>   ///< @todo Remove when done debugging
 #include <BspInclude.hpp>
 #include <ASDP_Core_API.h>
