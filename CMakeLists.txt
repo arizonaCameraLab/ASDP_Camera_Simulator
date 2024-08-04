@@ -73,6 +73,7 @@ set (ImageSource_SOURCES
   ImageSource.cpp
 )
 add_library(ImageSource STATIC ${ImageSource_SOURCES} ${ImageSource_HEADERS})
+set_target_properties(ImageSource PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 target_include_directories(ImageSource PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
@@ -85,6 +86,7 @@ set (Trigger_SOURCES
   Trigger.cpp
 )
 add_library(Trigger STATIC ${Trigger_SOURCES} ${Trigger_HEADERS})
+set_target_properties(Trigger PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 target_link_libraries(Trigger PUBLIC ImageSource ASDP_Core_API::ASDP_Core_API Threads::Threads)
 target_include_directories(Trigger PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
