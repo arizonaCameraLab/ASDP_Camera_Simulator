@@ -134,10 +134,13 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/ASDP_Camera_Simulator.conf"
 # Also install the DLL into the ASDP_Core_Module directory
 # alongside our binary installation.  This is a bit of a hack, but it will let us
 # provide the DLL to the ASDP_Core_Module project without having to copy it manually.
-# It will continue to use the configuration file in our bin directory.
-install(FILES "$<TARGET_FILE:ASDP_BSP>"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/../../ASDP_Core_Module/bin"
-)
+# It will continue to use the configuration file in our bin directory.  On Linux,
+# this will already be installed in /usr/local/lib.
+if(WIN32)
+  install(FILES "$<TARGET_FILE:ASDP_BSP>"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/../../ASDP_Core_Module/bin"
+  )
+endif()
 
 # Configure the project for use by client projects using CMake
 # This makes the project available as a package for use with find_package()
