@@ -522,7 +522,8 @@ void Camera::SliceThread()
     // Get the entry.
     Slice slice ;
     if (!m_sliceQueue.dequeue(slice, std::chrono::milliseconds(1))) {
-      continue;
+      // This should never happen. If it does, we're broken.
+      return;
     }
 
     uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sliceTime.time_since_epoch()).count() / 1000000;
