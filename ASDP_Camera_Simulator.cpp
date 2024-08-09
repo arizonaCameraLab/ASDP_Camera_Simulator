@@ -415,11 +415,17 @@ void Camera::TriggerThread()
     uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() % 1000000;
 
     // We have been triggered.  Get the next image and send it to any streams it should
-    // go to.
-    std::lock_guard<std::mutex> lock(m_mut);
+    // go to.  Grab the mutex while getting our list of streams so that it does not get
+    // changed out from under us.  Release the lock before we start looking at the
+    // streams so that we give the RemoveStream() method time to grab it when needed.
+    std::list<Stream> streams;
+    {
+      std::lock_guard<std::mutex> lock(m_mut);
+      streams = m_streams;
+    }
 
     // Check all of the streams to see if we should send an image to them.
-    for (auto& stream : m_streams) {
+    for (auto& stream : streams) {
       // Don't send if it is not yet time for this stream.
       if (seconds < stream.StartSeconds || (seconds == stream.StartSeconds && microseconds < stream.StartMicroseconds)) {
         continue;
