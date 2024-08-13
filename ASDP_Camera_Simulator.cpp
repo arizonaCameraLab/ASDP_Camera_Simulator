@@ -598,8 +598,10 @@ public:
   std::vector<Pose> Posers;
   float PosePeriod = 0.25;
 
-  /// @brief the timer object to avoid spin-waiting inside every thread.
-  std::shared_ptr< asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer;
+  /// @brief Timer objects to avoid spin-waiting inside every thread.
+  /// We need more than one because this becomes a bottleneck.
+  std::vector< std::shared_ptr< asdp::SpinFreeAccurateTimer<
+	  std::chrono::steady_clock::time_point> > > timers;
 
   /// @brief The triggers for the system.
   std::vector< std::shared_ptr<Trigger> > triggers;
@@ -612,6 +614,12 @@ public:
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
 {
+  // Set up five timers so that we'll have to handle at most 5 each.
+  for (size_t i = 0; i < 5; i++) {
+    timers.push_back(std::make_shared< asdp::SpinFreeAccurateTimer<
+		    std::chrono::steady_clock::time_point> >());
+  }
+
   if (configMap.find("Timing") != configMap.end()) {
     std::map<std::string, std::string> timing = configMap.at("Timing");
     try {
@@ -699,14 +707,10 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
 
 void State::ConfigureTriggers()
 {
-  if (!timer) {
-    timer = std::make_shared< asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> >();
-  }
-
   // Create the internal triggers which will by default be disabled and not tied to any external trigger.
   if (triggers.size() != NumInternalTriggers) {
     for (size_t i = 0; i < NumInternalTriggers; i++) {
-      triggers.push_back(std::make_shared<Trigger>(timer));
+      triggers.push_back(std::make_shared<Trigger>(timers[i % timers.size()]));
       externalTriggers.push_back(0);
     }
   }
@@ -717,7 +721,7 @@ State::~State()
   // Get rid of the cameras (and their threads), then the triggers (and their threads), then the timer.
   cameras.clear();
   triggers.clear();
-  timer.reset();
+  timers.clear();
 }
 
 /// @brief The state that is shared between the different functions.
@@ -862,9 +866,9 @@ namespace Bsp {
 
       // The arrays are 0-indexed whereas our numbers are 1-indexed.
       if (Trigger == 0) {
-        return state.cameras[Index - 1]->Setup(state.timer, nullptr);
+        return state.cameras[Index - 1]->Setup(state.timers[(Index-1) % state.timers.size()], nullptr);
       } else {
-        return state.cameras[Index - 1]->Setup(state.timer, state.triggers[Trigger - 1]);
+        return state.cameras[Index - 1]->Setup(state.timers[(Index-1) % state.timers.size()], state.triggers[Trigger - 1]);
       }
     }
 
