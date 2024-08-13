@@ -614,7 +614,7 @@ public:
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
 {
-  // Set up five timers so that we'll have to handle at most 5 each.
+  // Set up five timers so that each have to handle at most 5 streams each.
   for (size_t i = 0; i < 5; i++) {
     timers.push_back(std::make_shared< asdp::SpinFreeAccurateTimer<
 		    std::chrono::steady_clock::time_point> >());
@@ -708,6 +708,8 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
 void State::ConfigureTriggers()
 {
   // Create the internal triggers which will by default be disabled and not tied to any external trigger.
+  // Round-robin the timers onto the timers to spread the load.
+  /// @todo Consider a single timer to handle all triggers that is separate from the ones used for streaming.
   if (triggers.size() != NumInternalTriggers) {
     for (size_t i = 0; i < NumInternalTriggers; i++) {
       triggers.push_back(std::make_shared<Trigger>(timers[i % timers.size()]));
@@ -865,6 +867,7 @@ namespace Bsp {
       }
 
       // The arrays are 0-indexed whereas our numbers are 1-indexed.
+      // Round-robin the cameras onto the Timer objects so that they will not get overloaded.
       if (Trigger == 0) {
         return state.cameras[Index - 1]->Setup(state.timers[(Index-1) % state.timers.size()], nullptr);
       } else {
@@ -889,7 +892,6 @@ namespace Bsp {
 
       return status;
     }
-
   }
 
   /// Namespace for UDP inserter functions.
