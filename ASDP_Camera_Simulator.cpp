@@ -215,7 +215,9 @@ protected:
     uint32_t SkipFrames = 0;                    ///< How may frames to skip between sends, 0 for none.
     uint32_t StartSeconds = 0;                  ///< The time to start sending frames. Ignore any frames before this
     uint32_t StartMicroseconds = 0;             ///< The time to start sending frames. Ignore any frames before this
-    size_t curFrame = 0;  ///< The current frame number, starting with 0, used modulo SkipFrames to determine when to send a frame.
+    /// The current frame number, starting with 0, used modulo SkipFrames to determine when to send a frame.
+    /// Must be a pointer so that when we copy the stream we can still update the value it points to.
+    std::shared_ptr<size_t> curFrame = std::make_shared<size_t>(0);  
     std::shared_ptr<StreamWriter> writer;       ///< The StreamWriter being used to send the stream.
   };
 
@@ -431,7 +433,7 @@ void Camera::TriggerThread()
         continue;
       }
       // Don't send if we are skipping frames.  Increment the frame ID in any case.
-      if (stream.curFrame++ % (stream.SkipFrames+1) != 0) {
+      if ((*stream.curFrame)++ % (stream.SkipFrames+1) != 0) {
         continue;
       }
 
