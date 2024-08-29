@@ -499,10 +499,8 @@ public:
   std::vector<Pose> Posers;
   float PosePeriod = 0.25;
 
-  /// @brief Timer objects to avoid spin-waiting inside every thread.
-  /// We need more than one because this becomes a bottleneck.
-  std::vector< std::shared_ptr< asdp::SpinFreeAccurateTimer<
-	  std::chrono::steady_clock::time_point> > > timers;
+  /// @brief Timer object to avoid spin-waiting inside every thread.
+  std::shared_ptr< asdp::SpinFreeAccurateTimer< std::chrono::steady_clock::time_point> > timer;
 
   /// @brief The triggers for the system.
   std::vector< std::shared_ptr<Trigger> > triggers;
@@ -515,11 +513,8 @@ public:
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
 {
-  // Set up five timers so that each have to handle at most 5 streams each.
-  for (size_t i = 0; i < 5; i++) {
-    timers.push_back(std::make_shared< asdp::SpinFreeAccurateTimer<
-		    std::chrono::steady_clock::time_point> >());
-  }
+  // Set up timer
+  timer = std::make_shared< asdp::SpinFreeAccurateTimer< std::chrono::steady_clock::time_point> >();
 
   if (configMap.find("Timing") != configMap.end()) {
     std::map<std::string, std::string> timing = configMap.at("Timing");
@@ -613,7 +608,7 @@ void State::ConfigureTriggers()
   /// @todo Consider a single timer to handle all triggers that is separate from the ones used for streaming.
   if (triggers.size() != NumInternalTriggers) {
     for (size_t i = 0; i < NumInternalTriggers; i++) {
-      triggers.push_back(std::make_shared<Trigger>(timers[i % timers.size()]));
+      triggers.push_back(std::make_shared<Trigger>(timer));
       externalTriggers.push_back(0);
     }
   }
@@ -624,7 +619,6 @@ State::~State()
   // Get rid of the cameras (and their threads), then the triggers (and their threads), then the timer.
   cameras.clear();
   triggers.clear();
-  timers.clear();
 }
 
 /// @brief The state that is shared between the different functions.
