@@ -440,7 +440,6 @@ void Camera::TriggerThread()
       // Always push a frame end message to the stream at the time that the last line will be sent.
       // it will have an empty ROI so that no frame-data message will be sent.
       {
-        std::cout << "XXX end of frame" << std::endl;
         auto sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
         uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000;
         uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000;
