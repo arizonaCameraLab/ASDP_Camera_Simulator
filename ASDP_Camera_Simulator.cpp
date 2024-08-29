@@ -150,11 +150,9 @@ public:
   ~Camera();
 
   /// @brief Set up the camera with a trigger.
-  /// @param timer The timer to associate with the camera.
   /// @param trigger The trigger to associate with the camera. Nullptr to disable triggering.
   /// @return true if the camera was set up successfully, false otherwise.
-  bool Setup(std::shared_ptr< SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer,
-    std::shared_ptr<Trigger> trigger);
+  bool Setup(std::shared_ptr<Trigger> trigger);
 
   /// @brief Insert a stream into the camera.
   /// @param Endpoint The endpoint to send the stream to.
@@ -199,9 +197,6 @@ protected:
   /// @brief The internal trigger each camera is associated with (empty for none).
   std::shared_ptr<Trigger> m_trigger;
 
-  /// @brief Timer used for slice timing.
-  std::shared_ptr< SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > m_timer;
-
   /// @brief Mutex to use when modifying internal state.
   std::mutex m_mut;
 
@@ -235,39 +230,6 @@ protected:
 
   /// @brief A queue to push on when the camera is triggered.
   std::shared_ptr< asdp::SpinFreeQueue< std::chrono::steady_clock::time_point> > m_triggerQ;
-
-  //========================
-  // Sending thread that receives per-slice triggers and sends the slices.
-  // Handles the case where it misses a trigger by using the time to send each slice.
-
-  /// @brief Data structure holding information about a slice
-  struct Slice {
-    std::shared_ptr<StreamWriter> writer;           ///< The StreamWriter being used to send the stream.
-    std::chrono::steady_clock::time_point sendTime; ///< The time to send this slice.
-    std::shared_ptr<IS::Image> image;               ///< The image to send a portion of.
-    Bsp::UdpInserter::roi_s roi;                    ///< The region of interest to send. All zeros if empty (send frame end).
-  };
-  /// @brief The queue of slices that are ready to send, in increasing time order.
-  asdp::SpinFreeQueue<Slice> m_sliceQueue;
-
-  /// @brief The thread that sends the slices to the streams.
-  std::thread m_sliceThread;
-
-  /// @brief The mutex to use with the slice queue to avoid writing packets in both queues.
-  std::mutex m_sliceMut;
-
-  /// @brief The function that sends the slices to the streams.
-  void SliceThread();
-
-  /// @brief Atomic flag to signal the slice thread to stop.
-  std::atomic_bool m_sliceThreadStop = false;
-
-  /// Queue to push on when a slice is triggered.
-  /// After an entry has been added to the m_sliceQueue, an entry is added to this queue.
-  /// When the slice thread receives an entry on the m_sliceQ, it reads the m_sliceQueue
-  /// to find the corresponding entry.  There are always the same number of entries pushed
-  /// onto each queue.
-  std::shared_ptr< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> > m_sliceQ;
 };
 
 Camera::Camera(uint32_t cameraID, uint32_t cameraType, uint32_t sensorWidth, uint32_t sensorHeight,
@@ -281,7 +243,6 @@ Camera::Camera(uint32_t cameraID, uint32_t cameraType, uint32_t sensorWidth, uin
   , m_minPeriodSeconds(minPeriodSeconds)
   , m_maxPeriodSeconds(maxPeriodSeconds)
   , m_triggerQ(std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >())
-  , m_sliceQ(std::make_shared< asdp::SpinFreeQueue<std::chrono::steady_clock::time_point> >())
 {
 }
 
@@ -292,26 +253,17 @@ Camera::~Camera()
   if (m_triggerThread.joinable()) {
     m_triggerThread.join();
   }
-  m_sliceThreadStop = true;
-  if (m_sliceThread.joinable()) {
-    m_sliceThread.join();
-  }
 
   // Clear our streams and slice queue, then reset our trigger and timer.
   m_streams.clear();
-  m_sliceQ.reset();
   m_triggerQ.reset();
   m_trigger.reset();
-  m_timer.reset();
 }
 
-bool Camera::Setup(std::shared_ptr< SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer,
-  std::shared_ptr<Trigger> trigger)
+bool Camera::Setup(std::shared_ptr<Trigger> trigger)
 {
   {
     std::lock_guard<std::mutex> lock(m_mut);
-
-    m_timer = timer;
 
     // Construct the images that will be sent from the camera.
     // We must do this here because we can't run parallel threads in the constructor that
@@ -336,36 +288,27 @@ bool Camera::Setup(std::shared_ptr< SpinFreeAccurateTimer<std::chrono::steady_cl
   if (trigger) {
     m_triggerThreadStop = false;
     m_triggerThread = std::thread([this] { TriggerThread(); });
-    m_sliceThreadStop = false;
-    m_sliceThread = std::thread([this] { SliceThread(); });
   } else {
     m_triggerThreadStop = true;
     if (m_triggerThread.joinable()) {
       m_triggerThread.join();
     }
-    m_sliceThreadStop = true;
-    if (m_sliceThread.joinable()) {
-      m_sliceThread.join();
+  }
+
+  // Clear the trigger queue so it will be ready when re-started.
+  {
+    std::lock_guard<std::mutex> lock(m_mut);
+
+    std::chrono::steady_clock::time_point timePt;
+    while (m_triggerQ->size()) {
+      m_triggerQ->dequeue(timePt, std::chrono::milliseconds(10));
     }
-  }
 
-  // Clear the trigger and slice queues so they will be ready when re-started.
-  std::chrono::steady_clock::time_point timePt;
-  while (m_triggerQ->size()) {
-    m_triggerQ->dequeue(timePt, std::chrono::milliseconds(10));
-  }
-  while (m_sliceQ->size()) {
-    m_sliceQ->dequeue(timePt, std::chrono::milliseconds(10));
-  }
-  while (m_sliceQueue.size()) {
-    Slice slice;
-    m_sliceQueue.dequeue(slice, std::chrono::milliseconds(10));
-  }
-
-  // Register us with the trigger.
-  m_trigger = trigger;
-  if (trigger) {
-    trigger->RegisterClient(m_triggerQ);
+    // Register us with the trigger, if there is one.
+    m_trigger = trigger;
+    if (m_trigger) {
+      m_trigger->RegisterClient(m_triggerQ);
+    }
   }
   return true;
 }
@@ -443,27 +386,16 @@ void Camera::TriggerThread()
         continue;
       }
 
-      /// Wait until the slice queues are empty to prevent us from writing overlapping frames
-      m_sliceQ->awaitEmpty(0, std::chrono::milliseconds(1000));
-      m_sliceQueue.awaitEmpty(0, std::chrono::milliseconds(1000));
-
       // Send a begin-frame message to the stream.
-      {
-        std::lock_guard<std::mutex> lock(m_sliceMut);
-        std::shared_ptr<StreamPacket> packetBegin;
-        stream.writer->GetCurrentPacket(packetBegin);
-        MessageFrameBegin message(*packetBegin, Time(seconds, microseconds),
-          m_cameraID, m_cameraType, image->getWidth(), image->getHeight(), m_exposure, m_gain);
-        stream.writer->Flush();
-      }
+      std::shared_ptr<StreamPacket> packetBegin;
+      stream.writer->GetCurrentPacket(packetBegin);
+      MessageFrameBegin message(*packetBegin, Time(seconds, microseconds),
+        m_cameraID, m_cameraType, image->getWidth(), image->getHeight(), m_exposure, m_gain);
+      stream.writer->Flush();
 
       // Compare each image subset to the ROI and send it if it is in the ROI.
       // The time to send each is evenly divided across the duration of the frame.
       // Remember that the last slice may not have as many rows as the others.
-      // Put all of the slices into a vector, then schedule them in the Timer to be sent.
-      // The sending thread will send them when triggered.
-      // Store the time to send each slice inside the slice object so that the sending thread can use it to ensure that
-      // it doesn't miss slices even if it misses a condition variable trigger.
       /// @todo When simulating a 3kx3k camera, every line will be its own slice.
       uint32_t cols = image->getWidth();
       uint32_t rows = image->getHeight();
@@ -476,82 +408,50 @@ void Camera::TriggerThread()
           lastLine = rows - 1;
         }
         if (!((firstLine > stream.Roi.end_y) || (lastLine < stream.Roi.start_y))) {
-          Slice slice;
-          slice.writer = stream.writer;
-          slice.sendTime = triggerTime + std::chrono::microseconds(i * sliceTimeMicroseconds);
-          slice.image = image;
+          // Calculate the time to send this slice.
+          auto sendTime = triggerTime + std::chrono::microseconds(i * sliceTimeMicroseconds);
+          uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000;
+          uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000;
+
           // Trim the region of interest to fit inside the current slice.
-          slice.roi = stream.Roi;
+          auto roi = stream.Roi;
           if (firstLine > stream.Roi.start_y) {
-            slice.roi.start_y = firstLine;
+            roi.start_y = firstLine;
           }
           if (lastLine < stream.Roi.end_y) {
-            slice.roi.end_y = lastLine;
+            roi.end_y = lastLine;
           }
 
-          // Push the slice onto the slice queue.
-          m_sliceQueue.enqueue(slice);
+          // Send the ROI if it is not empty.
+          if (roi.end_y >= roi.start_y) {
+            // Wait until it is time to send the slice message.
+            while (std::chrono::steady_clock::now() < sendTime) { }
 
-          // Add an entry to the timer to send the slice at the appropriate time.
-          m_timer->AddEntry(slice.sendTime, slice.sendTime, m_sliceQ);
+            std::shared_ptr<StreamPacket> packetData;
+            stream.writer->GetCurrentPacket(packetData);
+            uint8_t* dataPtr = reinterpret_cast<uint8_t*>(image->getData()->data());
+            MessageFrameData message(*packetData, Time(seconds, microseconds), m_cameraID,
+              roi.start_x, roi.start_y, roi.end_x, roi.end_y, dataPtr, m_sensorWidth);
+            stream.writer->Flush();
+          }
         }
       }
 
       // Always push a frame end message to the stream at the time that the last line will be sent.
       // it will have an empty ROI so that no frame-data message will be sent.
       {
-        Slice slice;
-        slice.writer = stream.writer;
-        slice.sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
-        slice.image = image;
-        slice.roi = {};
+        std::cout << "XXX end of frame" << std::endl;
+        auto sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
+        uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000;
+        uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000;
 
-        // Push the slice onto the slice queue.
-        m_sliceQueue.enqueue(slice);
-
-        // Add an entry to the timer to send the slice at the appropriate time.
-        m_timer->AddEntry(slice.sendTime, slice.sendTime, m_sliceQ);
+        // Wait until it is time to send the frame end message.
+        while (std::chrono::steady_clock::now() < sendTime) {}
+        std::shared_ptr<StreamPacket> packetEnd;
+        stream.writer->GetCurrentPacket(packetEnd);
+        MessageFrameEnd message(*packetEnd, Time(seconds, microseconds), m_cameraID);
+        stream.writer->Flush();
       }
-    }
-  }
-}
-
-void Camera::SliceThread()
-{
-  while (!m_sliceThreadStop) {
-
-    // If there is an entry available on the sliceQ from the timer, read the corresponding entry from
-    // the sliceQueue and send it to the stream. Otherwise, time out and keep looking.
-    std::chrono::steady_clock::time_point sliceTime;
-    if (!m_sliceQ->dequeue(sliceTime, std::chrono::milliseconds(50))) {
-      continue;
-    }
-
-    // Get the entry.
-    Slice slice ;
-    if (!m_sliceQueue.dequeue(slice, std::chrono::milliseconds(1))) {
-      // This should never happen. If it does, we're broken.
-      return;
-    }
-
-    uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sliceTime.time_since_epoch()).count() / 1000000;
-    uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sliceTime.time_since_epoch()).count() % 1000000;
-
-    // If it has zero size, we instead send a frame end message. In any case, lock the slice mutex so
-    // we don't try to write a packet while the trigger thread is writing a packet.
-    std::lock_guard<std::mutex> lock(m_sliceMut);
-    if (slice.roi.start_y == 0 && slice.roi.end_y == 0) {
-      std::shared_ptr<StreamPacket> packetEnd;
-      slice.writer->GetCurrentPacket(packetEnd);
-      MessageFrameEnd message(*packetEnd, Time(seconds, microseconds), m_cameraID);
-      slice.writer->Flush();
-    } else {
-      std::shared_ptr<StreamPacket> packetData;
-      slice.writer->GetCurrentPacket(packetData);
-      uint8_t *dataPtr = reinterpret_cast<uint8_t*>(slice.image->getData()->data());
-      MessageFrameData message(*packetData, Time(seconds, microseconds), m_cameraID,
-        slice.roi.start_x, slice.roi.start_y, slice.roi.end_x, slice.roi.end_y, dataPtr, m_sensorWidth);
-      slice.writer->Flush();
     }
   }
 }
@@ -871,9 +771,9 @@ namespace Bsp {
       // The arrays are 0-indexed whereas our numbers are 1-indexed.
       // Round-robin the cameras onto the Timer objects so that they will not get overloaded.
       if (Trigger == 0) {
-        return state.cameras[Index - 1]->Setup(state.timers[(Index-1) % state.timers.size()], nullptr);
+        return state.cameras[Index - 1]->Setup(nullptr);
       } else {
-        return state.cameras[Index - 1]->Setup(state.timers[(Index-1) % state.timers.size()], state.triggers[Trigger - 1]);
+        return state.cameras[Index - 1]->Setup(state.triggers[Trigger - 1]);
       }
     }
 
