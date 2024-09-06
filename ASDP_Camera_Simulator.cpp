@@ -372,7 +372,7 @@ void Camera::TriggerThread()
     // Check all of the streams to see if we should send an image to them.
     for (auto& stream : streams) {
       // Don't send if it is not yet time for this stream.
-      if (seconds < stream.StartSeconds || (seconds == stream.StartSeconds && microseconds < stream.StartMicroseconds)) {
+      if (seconds < stream.StartSeconds || ((seconds == stream.StartSeconds) && (microseconds < stream.StartMicroseconds))) {
         continue;
       }
       // Don't send if we are skipping frames.  Increment the frame ID in any case.
@@ -438,7 +438,6 @@ void Camera::TriggerThread()
       }
 
       // Always push a frame end message to the stream at the time that the last line will be sent.
-      // it will have an empty ROI so that no frame-data message will be sent.
       {
         auto sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
         uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000;
