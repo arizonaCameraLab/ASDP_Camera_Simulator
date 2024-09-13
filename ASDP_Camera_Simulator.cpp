@@ -22,7 +22,7 @@
 #include <ASDP_SpinFreeQueue.hpp>
 #include <ASDP_SpinFreeAccurateTimer.hpp>
 #include <Trigger.h>
-#include <ImageSource.h>
+#include <ASDP_ImageSource.h>
 
 using namespace asdp;
 
@@ -192,7 +192,7 @@ protected:
   float m_maxPeriodSeconds;
 
   /// @brief The images that will be sent from the camera stored in a loopable source.
-  std::shared_ptr<IS::ImageSource> m_images;
+  std::shared_ptr<asdp::ImageSource::ImageSource> m_images;
 
   /// @brief The internal trigger each camera is associated with (empty for none).
   std::shared_ptr<Trigger> m_trigger;
@@ -272,7 +272,7 @@ bool Camera::Setup(std::shared_ptr<Trigger> trigger)
     /// @todo Read the number of images from the configuration file.
     /// @todo Enable specifying a directory to read the images from as files.
     size_t frames = 64;
-    m_images = std::make_shared<IS::MovingBarsSource>(1280, 1024, frames, 20, 48, 2);
+    m_images = std::make_shared<asdp::ImageSource::MovingBarsSource>(1280, 1024, frames, 20, 48, 2);
 
     // If we're already associated with a trigger, unregister us from it.
     if (m_trigger) {
@@ -381,7 +381,7 @@ void Camera::TriggerThread()
       }
 
       // Get the next image from the source.
-      std::shared_ptr<IS::Image> image = m_images->getNextImage();
+      std::shared_ptr<asdp::ImageSource::Image> image = m_images->getNextImage();
       if (!image) {
         continue;
       }

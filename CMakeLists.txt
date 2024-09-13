@@ -66,19 +66,6 @@ add_definitions(-DCONFIG_FILE_PATH="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BIND
 #-----------------------------------------------------------------------------
 # Build the helper static libraries.
 
-set (ImageSource_HEADERS
-  ImageSource.h
-)
-set (ImageSource_SOURCES
-  ImageSource.cpp
-)
-add_library(ImageSource STATIC ${ImageSource_SOURCES} ${ImageSource_HEADERS})
-set_target_properties(ImageSource PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-target_include_directories(ImageSource PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:include>
-)
-
 set (Trigger_HEADERS
   Trigger.h
 )
@@ -87,7 +74,7 @@ set (Trigger_SOURCES
 )
 add_library(Trigger STATIC ${Trigger_SOURCES} ${Trigger_HEADERS})
 set_target_properties(Trigger PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-target_link_libraries(Trigger PUBLIC ImageSource ASDP_Core_API::ASDP_Core_API Threads::Threads)
+target_link_libraries(Trigger PUBLIC ASDP_Core_API::ASDP_Core_API Threads::Threads)
 target_include_directories(Trigger PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
@@ -110,7 +97,7 @@ set (ASDP_Camera_Simulator_SOURCES
 )
 
 add_library(ASDP_BSP SHARED ${ASDP_Camera_Simulator_SOURCES} ${ASDP_Camera_Simulator_HEADERS})
-target_link_libraries(ASDP_BSP PRIVATE ImageSource Trigger)
+target_link_libraries(ASDP_BSP PRIVATE Trigger)
 target_include_directories(ASDP_BSP PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ASDP_BSP_API>
   $<INSTALL_INTERFACE:include>
@@ -175,7 +162,6 @@ if(BUILD_TESTS)
   enable_testing()
 
   set (CPP_TESTS
-    test_ImageSource
     test_Trigger
   )
   foreach (BASE ${CPP_TESTS})
@@ -184,7 +170,6 @@ if(BUILD_TESTS)
     set_target_properties(${APP} PROPERTIES FOLDER tests/C++)
     target_link_libraries(${APP} PRIVATE
       #ASDP_BSP
-      ImageSource
       Trigger
     )
     install(TARGETS ${APP} EXPORT ${PROJECT_NAME}
