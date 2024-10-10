@@ -274,6 +274,14 @@ bool Camera::Setup(std::shared_ptr<Trigger> trigger)
     size_t frames = 64;
     m_images = std::make_shared<asdp::ImageSource::MovingBarsSource>(1280, 1024, frames, 20, 48, 2);
 
+    // Intentionally de-synchronize the cameras so that we won't be surprised when they don't start
+    // at the same time.  There is nothing requiring them to remain synchronized but they often were,
+    // which was confusing when a Storage Module connects and they are not.
+    for (size_t i = 0; i < m_cameraID * 3; i++) {
+      // Toss images
+      m_images->getNextImage();
+    }
+
     // If we're already associated with a trigger, unregister us from it.
     if (m_trigger) {
       if (!m_trigger->UnregisterClient(m_triggerQ)) {
@@ -633,7 +641,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "1.1.0";
+    return "1.2.0";
   }
 
   uint32_t GetSerialNumber(void) {
