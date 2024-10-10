@@ -90,8 +90,8 @@ public:
     camera = this->camera;
     ID = this->ID;
     temperature = this->temperature;
-    seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
-    microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000);
+    microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000);
     return true;
   }
 
@@ -116,8 +116,8 @@ public:
       return false;
     }
     lastReportTime = now;
-    report.Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
-    report.Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    report.Seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000);
+    report.Microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000);
     report.Longitude = 0;
     report.Latitude = 0;
     report.Altitude = 0;
@@ -356,8 +356,8 @@ void Camera::TriggerThread()
       continue;
     }
 
-    uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() / 1000000;
-    uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() % 1000000;
+    uint32_t seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() / 1000000);
+    uint32_t microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() % 1000000);
 
     // We have been triggered.  Get the next image and send it to any streams it should
     // go to.  Grab the mutex while getting our list of streams so that it does not get
@@ -375,14 +375,15 @@ void Camera::TriggerThread()
       if (seconds < stream.StartSeconds || ((seconds == stream.StartSeconds) && (microseconds < stream.StartMicroseconds))) {
         continue;
       }
-      // Don't send if we are skipping frames.  Increment the frame ID in any case.
-      if ((*stream.curFrame)++ % (stream.SkipFrames+1) != 0) {
-        continue;
-      }
 
       // Get the next image from the source.
       std::shared_ptr<asdp::ImageSource::Image> image = m_images->getNextImage();
       if (!image) {
+        continue;
+      }
+
+      // Don't send if we are skipping frames.  Increment the frame ID in any case.
+      if ((*stream.curFrame)++ % (stream.SkipFrames+1) != 0) {
         continue;
       }
 
@@ -410,8 +411,8 @@ void Camera::TriggerThread()
         if (!((firstLine > stream.Roi.end_y) || (lastLine < stream.Roi.start_y))) {
           // Calculate the time to send this slice.
           auto sendTime = triggerTime + std::chrono::microseconds(i * sliceTimeMicroseconds);
-          uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000;
-          uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000;
+          uint32_t seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000);
+          uint32_t microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000);
 
           // Trim the region of interest to fit inside the current slice.
           auto roi = stream.Roi;
@@ -440,8 +441,8 @@ void Camera::TriggerThread()
       // Always push a frame end message to the stream at the time that the last line will be sent.
       {
         auto sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
-        uint32_t seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000;
-        uint32_t microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000;
+        uint32_t seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000);
+        uint32_t microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000);
 
         // Wait until it is time to send the frame end message.
         while (std::chrono::steady_clock::now() < sendTime) {}
@@ -632,7 +633,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "1.0.0";
+    return "1.1.0";
   }
 
   uint32_t GetSerialNumber(void) {
@@ -652,8 +653,8 @@ namespace Bsp {
 
     void GetCurrentSystemTime(uint32_t& Seconds, uint32_t& Microseconds) {
       auto now = std::chrono::steady_clock::now();
-      Seconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000;
-      Microseconds = (uint32_t)std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+      Seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() / 1000000);
+      Microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000);
     }
 
     bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
