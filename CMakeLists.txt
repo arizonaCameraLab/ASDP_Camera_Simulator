@@ -61,8 +61,6 @@ if (BUILD_DOXYGEN)
         VERBATIM )
 endif (BUILD_DOXYGEN)
 
-add_definitions(-DCONFIG_FILE_PATH="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
-
 #-----------------------------------------------------------------------------
 # Build the helper static libraries.
 
@@ -117,6 +115,9 @@ install(TARGETS ASDP_BSP EXPORT ${PROJECT_NAME}
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/ASDP_Camera_Simulator.conf"
   DESTINATION bin
 )
+
+# Now that we know the installation directory, define the CONFIG_FILE_PATH for the library.
+target_compile_definitions(ASDP_BSP PRIVATE CONFIG_FILE_PATH="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
 
 # Also install the DLL into the ASDP_Core_Module directory
 # alongside our binary installation.  This is a bit of a hack, but it will let us
