@@ -494,6 +494,7 @@ public:
   /// @brief Stop any threads and destruct the state cleanly.
   ~State();
 
+  uint32_t SerialNumber = 0;
   uint32_t NumInternalTriggers = 0;
   uint32_t NumExternalTriggers = 0;
   uint32_t NumTemperatureSensorsPerCamera = 0;
@@ -521,6 +522,14 @@ public:
 
 State::State(const std::map<std::string, std::map<std::string, std::string>>& configMap)
 {
+  // Set the serial number if it is specified.
+  if (configMap.find("General") != configMap.end()) {
+    std::map<std::string, std::string> general = configMap.at("General");
+    try {
+      SerialNumber = std::stoi(general.at("SerialNumber"));
+    } catch (...) {}
+  }
+
   // Set up timer
   timer = std::make_shared< asdp::SpinFreeAccurateTimer< std::chrono::steady_clock::time_point> >();
 
@@ -641,11 +650,11 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "1.2.0";
+    return "1.3.0";
   }
 
   uint32_t GetSerialNumber(void) {
-    return 0;
+    return state.SerialNumber;
   }
 
   /// Namespace for timing and trigger functions.
