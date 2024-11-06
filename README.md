@@ -25,7 +25,7 @@ systems could be used).  On Ubuntu Linux, this can be done as follows:
 
     sudo apt install cmake
     cd; mkdir src; cd src; git clone --recursive https://github.com/arizonaCameraLab/ASDP_Camera_Simulator
-    cd; mkdir -p build/ASDP_CoreSimulator; cd build/ASDP_Camera_Simulator
+    cd; mkdir -p build/ASDP_Camera_Simulator; cd build/ASDP_Camera_Simulator
     cmake ../../src/ASDP_Camera_Simulator
     make
 
