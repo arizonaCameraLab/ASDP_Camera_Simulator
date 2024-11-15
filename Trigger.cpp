@@ -4,7 +4,6 @@
 
 #include <Trigger.h>
 #include <vector>
-#include <iostream>   /// @todo Remove when done debugging
 
 Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer)
   : m_timer(timer)
@@ -288,8 +287,6 @@ std::string Trigger::Test()
     for (size_t j = 0; j < 10; j++) {
       // Send a trigger request at the desired offset fraction times the period.
       trigger.Fire(time);
-
-      /// @todo
 
       // Track how the offset changes
       double of = 0;
