@@ -18,7 +18,7 @@ Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady
   }
 }
 
-void Trigger::Configure(uint8_t Mode, float Period, float TrackingFactor)
+void Trigger::Configure(uint8_t Mode, double Period, float TrackingFactor)
 {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   uint8_t oldMode = m_mode;

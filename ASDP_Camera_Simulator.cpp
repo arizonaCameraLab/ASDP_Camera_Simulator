@@ -144,7 +144,7 @@ public:
   /// @param id The ID of the camera.
   Camera(
     uint32_t cameraID = 0, uint32_t cameraType = 0, uint32_t sensorWidth = 1280, uint32_t sensorHeight = 1024,
-    float exposure = 0.001f,  float gain = 1.0f, float minPeriodSeconds = 1/60.0f, float maxPeriodSeconds = 1/50.0f);
+    float exposure = 0.001f,  float gain = 1.0f, double minPeriodSeconds = 1/60.0, double maxPeriodSeconds = 1/50.0);
 
   /// @brief Destroy a camera object.
   ~Camera();
@@ -175,8 +175,8 @@ public:
   uint32_t GetSensorHeight() const { return m_sensorHeight; }
   float GetExposure() const { return m_exposure; }
   float GetGain() const { return m_gain; }
-  float GetMinPeriodSeconds() const { return m_minPeriodSeconds; }
-  float GetMaxPeriodSeconds() const { return m_maxPeriodSeconds; }
+  double GetMinPeriodSeconds() const { return m_minPeriodSeconds; }
+  double GetMaxPeriodSeconds() const { return m_maxPeriodSeconds; }
 
 protected:
 
@@ -188,8 +188,8 @@ protected:
   uint32_t m_sensorHeight;
   float m_exposure;
   float m_gain;
-  float m_minPeriodSeconds;
-  float m_maxPeriodSeconds;
+  double m_minPeriodSeconds;
+  double m_maxPeriodSeconds;
 
   /// @brief The images that will be sent from the camera stored in a loopable source.
   std::shared_ptr<asdp::ImageSource::ImageSource> m_images;
@@ -233,7 +233,7 @@ protected:
 };
 
 Camera::Camera(uint32_t cameraID, uint32_t cameraType, uint32_t sensorWidth, uint32_t sensorHeight,
-  float exposure, float gain, float minPeriodSeconds, float maxPeriodSeconds)
+  float exposure, float gain, double minPeriodSeconds, double maxPeriodSeconds)
   : m_cameraID(cameraID)
   , m_cameraType(cameraType)
   , m_sensorWidth(sensorWidth)
@@ -409,7 +409,7 @@ void Camera::TriggerThread()
       uint32_t cols = image->getWidth();
       uint32_t rows = image->getHeight();
       uint32_t numSlices = (rows+2) / 3;      ///< At most 3 rows per slice, but be sure to capture any partial write.
-      uint32_t sliceTimeMicroseconds = 1e6f * m_trigger->GetPeriod() / (numSlices + 1);  ///< Period gap to send each slice in seconds to be done before next
+      uint32_t sliceTimeMicroseconds = 1e6 * m_trigger->GetPeriod() / (numSlices + 1);  ///< Period gap to send each slice in seconds to be done before next
       for (uint32_t i = 0; i < numSlices; i++) {
         uint32_t firstLine = i * 3;
         uint32_t lastLine = (i + 1) * 3 - 1;
@@ -501,12 +501,12 @@ public:
   uint32_t NumSystemTemperatureSensors = 0;
   std::vector<Bsp::Pose::pose_report_s> PoseDeviceConfigurations;
   uint32_t NumCameras = 0;
-  float MinCameraPeriodSeconds = 1.0f/60;
-  float MaxCameraPeriodSeconds = 1.0f/50;
+  double MinCameraPeriodSeconds = 1.0/60;
+  double MaxCameraPeriodSeconds = 1.0/50;
   std::vector<TemperatureSensor> TemperatureSensors;
-  float TemperaturePeriod = 0.25;
+  float TemperaturePeriod = 0.25f;
   std::vector<Pose> Posers;
-  float PosePeriod = 0.25;
+  float PosePeriod = 0.25f;
 
   /// @brief Timer object to avoid spin-waiting inside every thread.
   std::shared_ptr< asdp::SpinFreeAccurateTimer< std::chrono::steady_clock::time_point> > timer;
@@ -589,10 +589,10 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
       NumCameras = std::stoi(camera.at("NumCameras"));
     } catch (...) {}
     try {
-      MinCameraPeriodSeconds = std::stof(camera.at("MinFramePeriodSeconds"));
+      MinCameraPeriodSeconds = std::stod(camera.at("MinFramePeriodSeconds"));
     } catch (...) {}
     try {
-      MaxCameraPeriodSeconds = std::stof(camera.at("MaxFramePeriodSeconds"));
+      MaxCameraPeriodSeconds = std::stod(camera.at("MaxFramePeriodSeconds"));
     } catch (...) {}
   }
 
@@ -650,7 +650,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "2.0.0";
+    return "3.0.0";
   }
 
   uint32_t GetSerialNumber(void) {
@@ -674,7 +674,7 @@ namespace Bsp {
       Microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000);
     }
 
-    bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, float Period, float TrackingFactor) {
+    bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, double Period, float TrackingFactor) {
       state.ConfigureTriggers();
       if ((ID == 0) || (ID > state.triggers.size())) {
         return false;

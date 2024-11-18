@@ -42,7 +42,7 @@ public:
   /// software, 3 = periodic software, 4 = one - shot hardware, 5 = periodic hardware.
   /// @param Period The period of the trigger in seconds.
   /// @param TrackingFactor The tracking factor for the trigger.
-  void Configure(uint8_t Mode, float Period, float TrackingFactor);
+  void Configure(uint8_t Mode, double Period, float TrackingFactor);
 
   /// @brief Register a client that will be notified when the trigger fires.
   /// @param queue The queue to register.
@@ -74,7 +74,7 @@ public:
 protected:
   // Configuration parameters for the trigger.
   uint8_t m_mode = 0;                 ///< The mode of the trigger.
-  float m_period = 0;                 ///< The period of the trigger in seconds.
+  double m_period = 0;                ///< The period of the trigger in seconds.
   float m_trackingFactor = 1;         ///< The tracking factor for the trigger.
   std::chrono::steady_clock::time_point m_lastRequestedTriggerTime = {}; ///< The last time the trigger was requested.
 
