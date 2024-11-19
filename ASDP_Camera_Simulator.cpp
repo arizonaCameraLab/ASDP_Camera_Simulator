@@ -69,6 +69,12 @@ static std::map<std::string, std::map<std::string, std::string>> ParseConfFile(c
   return confMap;
 }
 
+static std::string ToStringWithPrecision(double value, int precision = 20) {
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(precision) << value;
+  return out.str();
+}
+
 //==============================================================================
 // Helper classes that implement behaviors.
 
@@ -484,12 +490,12 @@ public:
   /// @brief Construct a state and start any required threads to operate the system.
   State(const std::map<std::string, std::map<std::string, std::string>>& configMap);
 
-  /// @brief Configures timer and triggers.
+  /// @brief Creates triggers.
   /// @details This cannot be done during the constructor of the State, which fires before the
   /// dynamic libraries are all loaded. At least on Windows, the thread function is never called.
   /// This function should be called before access to the timers is needed, in one of the user-
-  /// called functions.  It is idempotent (it has no effect if they are already set up).
-  void ConfigureTriggers();
+  /// called functions.  It is idempotent (it has no effect if they are already created).
+  void CreateTriggers();
 
   /// @brief Stop any threads and destruct the state cleanly.
   ~State();
@@ -618,13 +624,13 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
   }
 }
 
-void State::ConfigureTriggers()
+void State::CreateTriggers()
 {
   // Create the internal triggers which will by default be disabled and not tied to any external trigger.
   // Round-robin the timers onto the timers to spread the load.
   /// @todo Consider a single timer to handle all triggers that is separate from the ones used for streaming.
-  if (triggers.size() != NumInternalTriggers) {
-    for (size_t i = 0; i < NumInternalTriggers; i++) {
+  if (triggers.size() < NumInternalTriggers) {
+    for (size_t i = triggers.size(); i < NumInternalTriggers; i++) {
       triggers.push_back(std::make_shared<Trigger>(timer));
       externalTriggers.push_back(0);
     }
@@ -675,7 +681,7 @@ namespace Bsp {
     }
 
     bool ConfigureTrigger(uint16_t ID, uint8_t Mode, uint8_t ExternalID, double Period, float TrackingFactor) {
-      state.ConfigureTriggers();
+      state.CreateTriggers();
       if ((ID == 0) || (ID > state.triggers.size())) {
         return false;
       }
@@ -768,8 +774,8 @@ namespace Bsp {
     }
 
     bool SetupCamera(uint16_t Index, uint32_t Trigger) {
-      // Ensure that our triggers are configured.
-      state.ConfigureTriggers();
+      // Ensure that our triggers exist.
+      state.CreateTriggers();
 
       if ((Index == 0) || (Index > state.NumCameras)) {
         return false;
@@ -799,8 +805,8 @@ namespace Bsp {
       status["type"] = std::to_string(state.cameras[Index - 1]->GetCameraType());
       status["width"] = std::to_string(state.cameras[Index - 1]->GetSensorWidth());
       status["height"] = std::to_string(state.cameras[Index - 1]->GetSensorHeight());
-      status["minTriggerPeriod"] = std::to_string(state.cameras[Index - 1]->GetMinPeriodSeconds());
-      status["maxTriggerPeriod"] = std::to_string(state.cameras[Index - 1]->GetMaxPeriodSeconds());
+      status["minTriggerPeriod"] = ToStringWithPrecision(state.cameras[Index - 1]->GetMinPeriodSeconds());
+      status["maxTriggerPeriod"] = ToStringWithPrecision(state.cameras[Index - 1]->GetMaxPeriodSeconds());
 
       return status;
     }

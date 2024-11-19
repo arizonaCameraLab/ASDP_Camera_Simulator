@@ -4,6 +4,7 @@
 
 #include <Trigger.h>
 #include <vector>
+#include <iostream>
 
 Trigger::Trigger(std::shared_ptr<asdp::SpinFreeAccurateTimer<std::chrono::steady_clock::time_point> > timer)
   : m_timer(timer)
