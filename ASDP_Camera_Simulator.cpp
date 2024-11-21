@@ -16,7 +16,6 @@
 #include <list>
 #include <deque>
 #include <algorithm>
-#include <iostream>   ///< @todo Remove when done debugging
 #include <BspInclude.hpp>
 #include <ASDP_Core_API.h>
 #include <ASDP_SpinFreeQueue.hpp>
@@ -700,7 +699,6 @@ namespace Bsp {
 
       // See if any of the internal triggers are tied to this external trigger.  If so, fire them.
       // We stored the external trigger ID as a 1-indexed value, so we don't adjust it here.
-      std::cout << "XXX Got software trigger " << ExternalID << std::endl;
       for (size_t i = 0; i < state.triggers.size(); i++) {
         if (state.externalTriggers[i] == ExternalID) {
           if (!state.triggers[i]->Fire(
