@@ -71,7 +71,7 @@ bool Trigger::Fire(std::chrono::steady_clock::time_point time)
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
   // If we are disabled or configured as a hardware trigger, do nothing.
-  if ((m_mode & 0x02) == 0) {
+  if ((m_mode == 0) || ((m_mode & 0x04) != 0)) {
     return false;
   }
 

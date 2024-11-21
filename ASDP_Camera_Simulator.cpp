@@ -656,7 +656,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "3.0.0";
+    return "3.1.0";
   }
 
   uint32_t GetSerialNumber(void) {
@@ -700,6 +700,7 @@ namespace Bsp {
 
       // See if any of the internal triggers are tied to this external trigger.  If so, fire them.
       // We stored the external trigger ID as a 1-indexed value, so we don't adjust it here.
+      std::cout << "XXX Got software trigger " << ExternalID << std::endl;
       for (size_t i = 0; i < state.triggers.size(); i++) {
         if (state.externalTriggers[i] == ExternalID) {
           if (!state.triggers[i]->Fire(
