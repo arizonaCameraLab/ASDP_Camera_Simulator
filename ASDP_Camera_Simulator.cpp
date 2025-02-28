@@ -809,6 +809,16 @@ namespace Bsp {
 
       return status;
     }
+
+    bool SetNUCFlagState(bool Flipped) {
+      /// @todo Implement this if it is configured.
+      return false;
+    }
+
+    bool StartOnCameraNUC() {
+      /// @todo Implement this if it is configured.
+      return false;
+    }
   }
 
   /// Namespace for UDP inserter functions.
