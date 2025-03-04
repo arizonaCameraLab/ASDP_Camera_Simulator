@@ -655,7 +655,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "3.1.0";
+    return "3.2.0";
   }
 
   uint32_t GetSerialNumber(void) {
