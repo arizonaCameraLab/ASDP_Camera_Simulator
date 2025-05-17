@@ -443,7 +443,7 @@ void Camera::TriggerThread()
             MessageConsolidatedFrameData message(*packetData, Time(seconds, microseconds), Time(startSeconds, startMicroseconds),
               m_cameraID, m_cameraType, image->getWidth(), image->getHeight(),
               roi.start_x, roi.start_y, roi.end_x, roi.end_y,
-              i == 0, i == numSlices - 1, dataPtr, m_sensorWidth, m_exposure, m_gain);
+              roi.start_y == stream.Roi.start_y, roi.end_y == stream.Roi.end_y, dataPtr, m_sensorWidth, m_exposure, m_gain);
             stream.writer->Flush();
           }
         }
