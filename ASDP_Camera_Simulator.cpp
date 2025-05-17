@@ -400,13 +400,6 @@ void Camera::TriggerThread()
         continue;
       }
 
-      // Send a begin-frame message to the stream.
-      std::shared_ptr<StreamPacket> packetBegin;
-      stream.writer->GetCurrentPacket(packetBegin);
-      MessageFrameBegin message(*packetBegin, Time(seconds, microseconds),
-        m_cameraID, m_cameraType, image->getWidth(), image->getHeight(), m_exposure, m_gain);
-      stream.writer->Flush();
-
       // Compare each image subset to the ROI and send it if it is in the ROI.
       // The time to send each is evenly divided across the duration of the frame.
       // Remember that the last slice may not have as many rows as the others.
@@ -415,6 +408,9 @@ void Camera::TriggerThread()
       uint32_t rows = image->getHeight();
       uint32_t numSlices = (rows+2) / 3;      ///< At most 3 rows per slice, but be sure to capture any partial write.
       uint32_t sliceTimeMicroseconds = 1e6 * m_trigger->GetPeriod() / (numSlices + 1);  ///< Period gap to send each slice in seconds to be done before next
+      auto startSendTime = triggerTime + std::chrono::microseconds(sliceTimeMicroseconds);
+      uint32_t startSeconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(startSendTime.time_since_epoch()).count() / 1000000);
+      uint32_t startMicroseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(startSendTime.time_since_epoch()).count() % 1000000);
       for (uint32_t i = 0; i < numSlices; i++) {
         uint32_t firstLine = i * 3;
         uint32_t lastLine = (i + 1) * 3 - 1;
@@ -444,25 +440,13 @@ void Camera::TriggerThread()
             std::shared_ptr<StreamPacket> packetData;
             stream.writer->GetCurrentPacket(packetData);
             uint8_t* dataPtr = reinterpret_cast<uint8_t*>(image->getData()->data());
-            MessageFrameData message(*packetData, Time(seconds, microseconds), m_cameraID,
-              roi.start_x, roi.start_y, roi.end_x, roi.end_y, dataPtr, m_sensorWidth);
+            MessageConsolidatedFrameData message(*packetData, Time(seconds, microseconds), Time(startSeconds, startMicroseconds),
+              m_cameraID, m_cameraType, image->getWidth(), image->getHeight(),
+              roi.start_x, roi.start_y, roi.end_x, roi.end_y,
+              i == 0, i == numSlices - 1, dataPtr, m_sensorWidth, m_exposure, m_gain);
             stream.writer->Flush();
           }
         }
-      }
-
-      // Always push a frame end message to the stream at the time that the last line will be sent.
-      {
-        auto sendTime = triggerTime + std::chrono::microseconds(numSlices * sliceTimeMicroseconds);
-        uint32_t seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() / 1000000);
-        uint32_t microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(sendTime.time_since_epoch()).count() % 1000000);
-
-        // Wait until it is time to send the frame end message.
-        while (std::chrono::steady_clock::now() < sendTime) {}
-        std::shared_ptr<StreamPacket> packetEnd;
-        stream.writer->GetCurrentPacket(packetEnd);
-        MessageFrameEnd message(*packetEnd, Time(seconds, microseconds), m_cameraID);
-        stream.writer->Flush();
       }
     }
   }
@@ -655,7 +639,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "3.3.0";
+    return "4.0.0";
   }
 
   uint32_t GetSerialNumber(void) {
