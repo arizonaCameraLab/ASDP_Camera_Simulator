@@ -437,13 +437,36 @@ void Camera::TriggerThread()
             // Wait until it is time to send the slice message.
             while (std::chrono::steady_clock::now() < sendTime) { }
 
+            bool beginFrame = (roi.start_y == stream.Roi.start_y);
+            bool endFrame = (roi.end_y == stream.Roi.end_y);
+
+            // The time for the frame is the time it was send unless the begin/end frame bits are set.
+            if (beginFrame) {
+              if (endFrame) {
+                // Both begin and end frame are set, record the time halfway through the frame.
+                auto halfFrame = triggerTime + std::chrono::microseconds(static_cast<uint32_t>(m_trigger->GetPeriod() / 2 + 0.5f));
+                seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(halfFrame.time_since_epoch()).count() / 1000000);
+                microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(halfFrame.time_since_epoch()).count() % 1000000);
+              } else {
+                // Use the start time of the frame even if we are not sending that pixel.
+                seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() / 1000000);
+                microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() % 1000000);
+              }
+            } else if (endFrame) {
+              // Only end frame is set, record the time of the end of the total frame even if we are not sending that pixel.
+              auto endOfFrame = triggerTime + std::chrono::microseconds(static_cast<uint32_t>(m_trigger->GetPeriod()+0.5f));
+              seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(endOfFrame.time_since_epoch()).count() / 1000000);
+              microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(endOfFrame.time_since_epoch()).count() % 1000000);
+            }
+            Time myTime(seconds, microseconds);
+
             std::shared_ptr<StreamPacket> packetData;
             stream.writer->GetCurrentPacket(packetData);
             uint8_t* dataPtr = reinterpret_cast<uint8_t*>(image->getData()->data());
-            MessageConsolidatedFrameData message(*packetData, Time(seconds, microseconds), Time(startSeconds, startMicroseconds),
+            MessageConsolidatedFrameData message(*packetData, myTime,
               m_cameraID, m_cameraType, image->getWidth(), image->getHeight(),
               roi.start_x, roi.start_y, roi.end_x, roi.end_y,
-              roi.start_y == stream.Roi.start_y, roi.end_y == stream.Roi.end_y, dataPtr, m_sensorWidth, m_exposure, m_gain);
+              beginFrame, endFrame, dataPtr, m_sensorWidth, m_exposure, m_gain);
             stream.writer->Flush();
           }
         }
