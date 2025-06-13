@@ -454,7 +454,7 @@ void Camera::TriggerThread()
               }
             } else if (endFrame) {
               // Only end frame is set, record the time of the end of the total frame even if we are not sending that pixel.
-              auto endOfFrame = triggerTime + std::chrono::microseconds(static_cast<uint32_t>(m_trigger->GetPeriod()+0.5f));
+              auto endOfFrame = triggerTime + std::chrono::microseconds(static_cast<uint32_t>(1e6*m_trigger->GetPeriod()+0.5f));
               seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(endOfFrame.time_since_epoch()).count() / 1000000);
               microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(endOfFrame.time_since_epoch()).count() % 1000000);
             }
