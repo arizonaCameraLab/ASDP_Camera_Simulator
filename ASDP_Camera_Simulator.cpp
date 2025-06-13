@@ -444,7 +444,7 @@ void Camera::TriggerThread()
             if (beginFrame) {
               if (endFrame) {
                 // Both begin and end frame are set, record the time halfway through the frame.
-                auto halfFrame = triggerTime + std::chrono::microseconds(static_cast<uint32_t>(m_trigger->GetPeriod() / 2 + 0.5f));
+                auto halfFrame = triggerTime + std::chrono::microseconds(static_cast<uint32_t>(1e6*m_trigger->GetPeriod() / 2 + 0.5f));
                 seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(halfFrame.time_since_epoch()).count() / 1000000);
                 microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(halfFrame.time_since_epoch()).count() % 1000000);
               } else {
