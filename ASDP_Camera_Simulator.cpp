@@ -817,12 +817,12 @@ namespace Bsp {
       return status;
     }
 
-    bool SetNUCFlagState(bool Flipped) {
+    bool SetNUCFlagState(uint16_t Index, bool Flipped) {
       /// @todo Implement this if it is configured.
       return false;
     }
 
-    bool StartOnCameraNUC() {
+    bool StartOnCameraNUC(uint16_t Index) {
       /// @todo Implement this if it is configured.
       return false;
     }
