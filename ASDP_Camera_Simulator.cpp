@@ -662,7 +662,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "4.0.0";
+    return "5.0.0";
   }
 
   uint32_t GetSerialNumber(void) {
@@ -797,6 +797,26 @@ namespace Bsp {
       } else {
         return state.cameras[Index - 1]->Setup(state.triggers[Trigger - 1]);
       }
+    }
+
+    bool RegisterNUCFlagStateCallback(CameraBooleanStateCallback CallbackFunction, void* UserData) {
+      /// @todo Implement this if it is configured.
+      return true;
+    }
+
+    bool nregisterNUCFlagStateCallback() {
+      /// @todo Implement this if it is configured.
+      return true;
+    }
+
+    bool RegisterOnCameraNUCStateCallback(CameraBooleanStateCallback CallbackFunction, void* UserData) {
+      /// @todo Implement this if it is configured.
+      return true;
+    }
+
+    bool UnregisterOnCameraNUCStateCallback() {
+      /// @todo Implement this if it is configured.
+      return true;
     }
 
     std::map<std::string, std::string> GetStatus(uint16_t Index) {
