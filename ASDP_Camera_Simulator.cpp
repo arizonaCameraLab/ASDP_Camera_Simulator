@@ -362,12 +362,17 @@ bool Camera::RemoveStream(Bsp::UdpInserter::endpoint_s Endpoint)
 
 void Camera::TriggerThread()
 {
+  std::chrono::steady_clock::time_point lastTriggerTime = std::chrono::steady_clock::now();
   while (!m_triggerThreadStop) {
     // See if we have been triggered.  Time out if not so we can check the stop flag.
     std::chrono::steady_clock::time_point triggerTime;
     if (!m_triggerQ->dequeue(triggerTime, std::chrono::milliseconds(50))) {
       continue;
     }
+
+    // Compute the time in microseconds since the last trygger time and then update the last time.
+    uint32_t elapsedMicroseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime - lastTriggerTime).count());
+    lastTriggerTime = triggerTime;
 
     uint32_t seconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() / 1000000);
     uint32_t microseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(triggerTime.time_since_epoch()).count() % 1000000);
@@ -466,7 +471,8 @@ void Camera::TriggerThread()
             MessageConsolidatedFrameData message(*packetData, myTime,
               m_cameraID, m_cameraType, image->getWidth(), image->getHeight(),
               roi.start_x, roi.start_y, roi.end_x, roi.end_y,
-              beginFrame, endFrame, dataPtr, m_sensorWidth, m_exposure, m_gain);
+              beginFrame, endFrame, dataPtr, m_sensorWidth, m_exposure, m_gain,
+              Time(startSeconds, startMicroseconds), elapsedMicroseconds);
             stream.writer->Flush();
           }
         }
@@ -662,7 +668,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "5.0.0";
+    return "5.1.0";
   }
 
   uint32_t GetSerialNumber(void) {
