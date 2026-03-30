@@ -471,8 +471,7 @@ void Camera::TriggerThread()
             MessageConsolidatedFrameData message(*packetData, myTime,
               m_cameraID, m_cameraType, image->getWidth(), image->getHeight(),
               roi.start_x, roi.start_y, roi.end_x, roi.end_y,
-              beginFrame, endFrame, dataPtr, m_sensorWidth, m_exposure, m_gain,
-              Time(startSeconds, startMicroseconds), elapsedMicroseconds);
+              beginFrame, endFrame, dataPtr, m_sensorWidth, m_exposure, m_gain);
             stream.writer->Flush();
           }
         }
@@ -668,7 +667,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "5.1.0";
+    return "5.2.0";
   }
 
   uint32_t GetSerialNumber(void) {
