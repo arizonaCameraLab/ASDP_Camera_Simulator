@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024: Arizona Board of Regents on Behalf of the University of Arizona
+ * Copyright (C) 2024-2026: Arizona Board of Regents on Behalf of the University of Arizona
  */
 
 #include <fstream>
@@ -601,6 +601,8 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     }
   }
 
+  // The camera types default to the maximum uint32_t if they are not specified in the configuration file.
+  std::vector<uint16_t> cameraTypes;
   if (configMap.find("Camera") != configMap.end()) {
     std::map<std::string, std::string> camera = configMap.at("Camera");
     try {
@@ -611,6 +613,23 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
     } catch (...) {}
     try {
       MaxCameraPeriodSeconds = std::stod(camera.at("MaxFramePeriodSeconds"));
+    } catch (...) {}
+    try {
+      std::istringstream iss(camera.at("Types"));
+      uint32_t type;
+      size_t index = 0;
+      while (iss >> type) {
+        if (index < NumCameras) {
+          cameraTypes.push_back(type);
+          index++;
+        }
+      }
+      if (index > 0 && index < NumCameras) {
+        // If there are fewer types than cameras, fill the rest with the last value.
+        for (; index < NumCameras; index++) {
+          cameraTypes.push_back(cameraTypes.back());
+        }
+      }
     } catch (...) {}
   }
 
@@ -631,7 +650,7 @@ State::State(const std::map<std::string, std::map<std::string, std::string>>& co
 
   // Cameras are initially not triggered.
   for (uint32_t i = 0; i < NumCameras; i++) {
-    cameras.push_back(std::make_shared<Camera>(i+1, 0, 1280, 1024, 0.001f, 1.0f,
+    cameras.push_back(std::make_shared<Camera>(i+1, cameraTypes[i], 1280, 1024, 0.001f, 1.0f,
       MinCameraPeriodSeconds, MaxCameraPeriodSeconds));
   }
 }
@@ -668,7 +687,7 @@ static State state(ConfigMap);
 namespace Bsp {
 
   std::string GetVersion(void) {
-    return "5.1.0";
+    return "5.2.0";
   }
 
   uint32_t GetSerialNumber(void) {
